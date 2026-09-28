@@ -154,6 +154,21 @@ class AdminApiClient:
             idempotency_header="X-Idempotency-Key",
         )
 
+    async def delete_account_data(
+        self, user_id: str, deletion_request_id: str, event_id: str
+    ) -> dict[str, Any]:
+        return await self._request_json(
+            "POST",
+            "/internal/v1/account-deletions",
+            {
+                "user_id": user_id,
+                "deletion_request_id": deletion_request_id,
+                "event_id": event_id,
+            },
+            idempotency_key=event_id,
+            idempotency_header="X-Event-Id",
+        )
+
     async def _request_json(
         self,
         method: str,
