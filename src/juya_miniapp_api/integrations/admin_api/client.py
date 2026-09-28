@@ -93,6 +93,67 @@ class AdminApiClient:
         )
         return EntitlementProjection.model_validate(payload)
 
+    async def create_feedback(
+        self,
+        *,
+        user_id: str,
+        category: str,
+        description: str,
+        source: Mapping[str, object],
+        screenshots: Sequence[str],
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        return await self._request_json(
+            "POST",
+            "/internal/v1/feedback",
+            {
+                "user_id": user_id,
+                "category": category,
+                "description": description,
+                "source": dict(source),
+                "screenshots": list(screenshots),
+            },
+            idempotency_key=idempotency_key,
+            idempotency_header="X-Idempotency-Key",
+        )
+
+    async def list_feedback(self, user_id: str) -> list[dict[str, Any]]:
+        payload = await self._request_json(
+            "POST", "/internal/v1/feedback/query", {"user_id": user_id}
+        )
+        items = payload.get("items", [])
+        return [dict(item) for item in items if isinstance(item, dict)]
+
+    async def get_feedback(self, feedback_id: str) -> dict[str, Any]:
+        return await self._request_json("GET", f"/internal/v1/feedback/{feedback_id}")
+
+    async def supplement_feedback(
+        self, feedback_id: str, user_id: str, text: str, idempotency_key: str
+    ) -> dict[str, Any]:
+        return await self._request_json(
+            "POST",
+            f"/internal/v1/feedback/{feedback_id}/supplements",
+            {"user_id": user_id, "text": text},
+            idempotency_key=idempotency_key,
+            idempotency_header="X-Idempotency-Key",
+        )
+
+    async def resolve_feedback(
+        self,
+        feedback_id: str,
+        user_id: str,
+        action: str,
+        reason: str | None,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        return await self._request_json(
+            "POST",
+            f"/internal/v1/feedback/{feedback_id}/resolution",
+            {"user_id": user_id, "action": action, "reason": reason},
+            idempotency_key=idempotency_key,
+            idempotency_header="X-Idempotency-Key",
+        )
+
     async def _request_json(
         self,
         method: str,
@@ -100,6 +161,7 @@ class AdminApiClient:
         payload: Mapping[str, object] | None = None,
         *,
         idempotency_key: str | None = None,
+        idempotency_header: str = "Idempotency-Key",
     ) -> dict[str, Any]:
         body = (
             b""
@@ -126,7 +188,7 @@ class AdminApiClient:
                 ),
             }
             if idempotency_key is not None:
-                headers["Idempotency-Key"] = idempotency_key
+                headers[idempotency_header] = idempotency_key
             request_id = self._request_id_factory()
             if request_id:
                 headers["X-Request-ID"] = request_id

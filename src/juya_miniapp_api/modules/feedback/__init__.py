@@ -1,0 +1,1 @@
+"""Feedback BFF domain."""
