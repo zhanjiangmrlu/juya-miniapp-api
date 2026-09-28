@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from juya_miniapp_api.infrastructure.observability.metrics import MESSAGE_BACKLOG
 from juya_miniapp_api.modules.messages.domain import InboxMessage, MessagePage
 from juya_miniapp_api.modules.messages.repository import MessageRepository
 
@@ -45,4 +46,6 @@ class MessageService:
         return await self._repository.mark_read(user_id, message_id, now)
 
     async def unread_count(self, user_id: str) -> int:
-        return await self._repository.count_unread(user_id)
+        count = await self._repository.count_unread(user_id)
+        MESSAGE_BACKLOG.set(count)
+        return count

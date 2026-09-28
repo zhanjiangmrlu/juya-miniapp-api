@@ -1,0 +1,74 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: juya
+      MYSQL_USER: juya
+      MYSQL_PASSWORD: juya-dev
+      MYSQL_ROOT_PASSWORD: root-dev
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot-dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - juya_mysql:/var/lib/mysql
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - juya_redis:/data
+
+  miniapp-api:
+    build: .
+    env_file: .env
+    environment:
+      JUYA_DATABASE_URL: mysql+asyncmy://juya:juya-dev@mysql:3306/juya
+      JUYA_REDIS_URL: redis://redis:6379/0
+      JUYA_PROCESS_TYPE: api
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  miniapp-worker:
+    build: .
+    env_file: .env
+    environment:
+      JUYA_DATABASE_URL: mysql+asyncmy://juya:juya-dev@mysql:3306/juya
+      JUYA_REDIS_URL: redis://redis:6379/0
+      JUYA_PROCESS_TYPE: worker
+      JUYA_ENABLE_BEAT: "true"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  juya_mysql:
+  juya_redis:

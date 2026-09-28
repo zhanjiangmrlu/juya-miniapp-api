@@ -1,11 +1,13 @@
 import json
 import secrets
+import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
+from juya_miniapp_api.infrastructure.observability.metrics import ADMIN_API_LATENCY
 from juya_miniapp_api.infrastructure.observability.request_id import get_traceparent
 from juya_miniapp_api.infrastructure.security.service_hmac import sign_request
 from juya_miniapp_api.integrations.admin_api.schemas import (
@@ -214,6 +216,7 @@ class AdminApiClient:
             if traceparent:
                 headers["traceparent"] = traceparent
             try:
+                started_at = time.perf_counter()
                 response = await self._client.request(
                     method,
                     path,
@@ -222,9 +225,16 @@ class AdminApiClient:
                     timeout=self.timeout,
                 )
             except httpx.TransportError as error:
+                ADMIN_API_LATENCY.labels(operation=method, outcome="transport_error").observe(
+                    time.perf_counter() - started_at
+                )
                 if attempt + 1 < attempts:
                     continue
                 raise AdminApiUnavailable() from error
+            ADMIN_API_LATENCY.labels(
+                operation=method,
+                outcome="success" if response.status_code < 400 else "upstream_error",
+            ).observe(time.perf_counter() - started_at)
             if response.status_code >= 400:
                 self._raise_upstream_error(response)
             value = response.json()

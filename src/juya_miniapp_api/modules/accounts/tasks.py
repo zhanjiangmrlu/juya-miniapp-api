@@ -9,6 +9,10 @@ from juya_miniapp_api.modules.accounts.service import AccountLifecycleService
 from juya_miniapp_api.shared.errors import AppError
 
 
+class CleanupConfirmationPending(RuntimeError):
+    """The cleanup command was accepted but the signed callback has not arrived."""
+
+
 async def execute_due_account_deletions(service: AccountLifecycleService, now: datetime) -> int:
     return len(await service.execute_due_deletions(now))
 
@@ -28,5 +32,6 @@ def create_account_cleanup_handler(
         if not user_id or not request_id:
             raise AppError("OUTBOX_PAYLOAD_INVALID", "异步事件数据不完整", 422)
         await client.delete_account_data(user_id, request_id, event.id)
+        raise CleanupConfirmationPending("waiting for deletion cleanup callback")
 
     return handle

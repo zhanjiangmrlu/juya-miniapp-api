@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from juya_miniapp_api.infrastructure.db.session import create_engine, create_session_factory
 from juya_miniapp_api.modules.accounts.repository import SQLAlchemyAccountRepository
@@ -44,11 +45,14 @@ async def test_deletion_revoke_and_execute_are_mutually_exclusive() -> None:
         request = await service.request_deletion(public_id, NOW - timedelta(days=7))
         request_id = request.id
 
-        await asyncio.gather(
+        results = await asyncio.gather(
             service.revoke_deletion(public_id, NOW),
             service.execute_due_deletions(NOW),
             return_exceptions=True,
         )
+
+        assert not any(isinstance(item, SQLAlchemyError) for item in results)
+        assert any(not isinstance(item, Exception) for item in results)
 
         current = await repository.get_deletion(public_id, request.id)
         assert current.status in {"REVOKED", "DELETING"}

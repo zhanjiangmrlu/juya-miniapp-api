@@ -1,8 +1,11 @@
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from juya_miniapp_api.infrastructure.redis.rate_limit import RateLimiter, enforce_rate_limit
 from juya_miniapp_api.integrations.oss.upload import OssUploadService
 from juya_miniapp_api.modules.feedback.service import FeedbackService
 from juya_miniapp_api.modules.users.router import UserDependency
@@ -32,6 +35,8 @@ def create_feedback_router(
     uploads: OssUploadService,
     *,
     user_dependency: UserDependency,
+    rate_limiter: RateLimiter | None = None,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/feedback", tags=["feedback"])
 
@@ -47,6 +52,14 @@ def create_feedback_router(
         user_id: Annotated[str, Depends(user_dependency)],
         idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
     ) -> dict[str, Any]:
+        await enforce_rate_limit(
+            rate_limiter,
+            "feedback",
+            user_id,
+            limit=5,
+            window=timedelta(hours=1),
+            now=clock(),
+        )
         return await service.create(
             user_id,
             payload.category,
@@ -61,6 +74,14 @@ def create_feedback_router(
         user_id: Annotated[str, Depends(user_dependency)],
         content_type: Annotated[str, Query(alias="content_type")],
     ) -> dict[str, object]:
+        await enforce_rate_limit(
+            rate_limiter,
+            "feedback_upload",
+            user_id,
+            limit=10,
+            window=timedelta(hours=1),
+            now=clock(),
+        )
         return uploads.create_feedback_upload(user_id, content_type)
 
     @router.get("/{feedback_id}")

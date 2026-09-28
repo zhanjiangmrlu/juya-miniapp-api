@@ -5,10 +5,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, ConfigDict, Field
 
+from juya_miniapp_api.infrastructure.observability.metrics import PROGRESS_FAILURES
 from juya_miniapp_api.modules.learning.domain import LearningProgress, ReadingPosition
 from juya_miniapp_api.modules.learning.repository import SQLAlchemyLearningRepository
 from juya_miniapp_api.modules.learning.service import LearningService
 from juya_miniapp_api.modules.users.router import UserDependency
+from juya_miniapp_api.shared.errors import AppError
 
 
 class PositionRequest(BaseModel):
@@ -48,13 +50,20 @@ def create_learning_router(
         payload: PositionRequest,
         user_id: Annotated[str, Depends(user_dependency)],
     ) -> dict[str, object]:
-        result = await service.save_progress(
-            user_id,
-            scene_id,
-            payload.client_sequence,
-            ReadingPosition(payload.entry_id, payload.offset),
-            clock(),
-        )
+        try:
+            result = await service.save_progress(
+                user_id,
+                scene_id,
+                payload.client_sequence,
+                ReadingPosition(payload.entry_id, payload.offset),
+                clock(),
+            )
+        except AppError as error:
+            PROGRESS_FAILURES.labels(code=error.code).inc()
+            raise
+        except Exception:
+            PROGRESS_FAILURES.labels(code="INTERNAL_ERROR").inc()
+            raise
         return _progress(result)
 
     @router.post("/scenes/{scene_id}/complete")

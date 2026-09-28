@@ -37,6 +37,10 @@ class AuthRepository(Protocol):
 
     async def revoke_all(self, user_id: str, reason: str, now: datetime) -> None: ...
 
+    async def validate_access_session(
+        self, user_id: str, session_id: str, now: datetime
+    ) -> None: ...
+
 
 class InMemoryAuthRepository:
     def __init__(self) -> None:
@@ -103,6 +107,15 @@ class InMemoryAuthRepository:
         for session in self.sessions.values():
             if session.user.public_id == user_id and session.revoked_at is None:
                 session.revoked_at = now
+
+    async def validate_access_session(self, user_id: str, session_id: str, now: datetime) -> None:
+        session = self.sessions.get(session_id)
+        if session is None or session.user.public_id != user_id:
+            raise AppError("SESSION_INVALID", "会话无效", 401)
+        if session.revoked_at is not None:
+            raise AppError("SESSION_REVOKED", "会话已撤销", 401)
+        if now >= session.expires_at:
+            raise AppError("SESSION_EXPIRED", "会话已过期", 401)
 
 
 def _database_datetime(value: datetime) -> datetime:
@@ -279,6 +292,29 @@ class SQLAlchemyAuthRepository:
                 ),
                 {"now": _database_datetime(now), "public_id": user_id},
             )
+
+    async def validate_access_session(self, user_id: str, session_id: str, now: datetime) -> None:
+        async with self._session_factory() as session:
+            row = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT s.expires_at, s.revoked_at FROM user_session s "
+                            "JOIN user_account u ON u.id = s.user_id "
+                            "WHERE s.id = :session_id AND u.public_id = :user_id"
+                        ),
+                        {"session_id": session_id, "user_id": user_id},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+        if row is None:
+            raise AppError("SESSION_INVALID", "会话无效", 401)
+        if row["revoked_at"] is not None:
+            raise AppError("SESSION_REVOKED", "会话已撤销", 401)
+        if now >= _utc_datetime(row["expires_at"]):
+            raise AppError("SESSION_EXPIRED", "会话已过期", 401)
 
     @staticmethod
     async def _find_user(

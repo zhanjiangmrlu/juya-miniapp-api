@@ -1,9 +1,10 @@
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 
+from juya_miniapp_api.infrastructure.redis.rate_limit import RateLimiter, enforce_rate_limit
 from juya_miniapp_api.modules.contacts.service import ContactService
 from juya_miniapp_api.modules.users.router import UserDependency, _contact
 from juya_miniapp_api.modules.users.schemas import ContactSaveRequest, CorrectionCreateRequest
@@ -14,6 +15,7 @@ def create_contacts_router(
     service: ContactService,
     *,
     user_dependency: UserDependency,
+    rate_limiter: RateLimiter | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/me/contact", tags=["contact"])
@@ -34,6 +36,14 @@ def create_contacts_router(
     ) -> dict[str, object] | None:
         if not payload.consent_confirmed:
             raise AppError("CONTACT_CONSENT_REQUIRED", "请确认联系方式用途", 422)
+        await enforce_rate_limit(
+            rate_limiter,
+            "contact_update",
+            user_id,
+            limit=5,
+            window=timedelta(hours=1),
+            now=clock(),
+        )
         response.headers["Cache-Control"] = "private, no-store"
         return _contact(
             await service.save(

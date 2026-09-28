@@ -11,7 +11,7 @@ from juya_miniapp_api.modules.users.router import serialize_me
 from juya_miniapp_api.modules.users.service import MeView, UserService
 from juya_miniapp_api.shared.errors import AppError
 
-ServiceDependency = Callable[[], Awaitable[ServicePrincipal]]
+ServiceDependency = Callable[..., Awaitable[ServicePrincipal]]
 
 
 class UserSearchRequest(BaseModel):

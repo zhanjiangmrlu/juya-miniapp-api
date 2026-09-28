@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from juya_miniapp_api.modules.favorites.domain import FavoriteEntry
 from juya_miniapp_api.modules.favorites.repository import SQLAlchemyFavoriteRepository
 from juya_miniapp_api.modules.favorites.service import FavoriteService
+from juya_miniapp_api.modules.learning.catalog_service import CatalogService
 from juya_miniapp_api.modules.users.router import UserDependency
 
 
@@ -51,6 +52,7 @@ def create_favorites_router(
     repository: SQLAlchemyFavoriteRepository,
     *,
     user_dependency: UserDependency,
+    catalog: CatalogService | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["favorites"])
@@ -92,7 +94,24 @@ def create_favorites_router(
         favorite_id: str,
         user_id: Annotated[str, Depends(user_dependency)],
     ) -> dict[str, object]:
-        return _favorite(await service.detail(user_id, favorite_id, accessible_scene_ids=set()))
+        accessible_scene_ids: set[str] = set()
+        favorite = await repository.get(user_id, favorite_id)
+        if favorite is not None and catalog is not None:
+            projections = await catalog.access(
+                user_id, [source.scene_id for source in favorite.sources]
+            )
+            accessible_scene_ids = {
+                item.scene_id
+                for item in projections
+                if item.level not in {"NONE", "NO_ACCESS", "DENIED", "EXPIRED"}
+            }
+        return _favorite(
+            await service.detail(
+                user_id,
+                favorite_id,
+                accessible_scene_ids=accessible_scene_ids,
+            )
+        )
 
     @router.delete("/favorites/{favorite_id}", status_code=204)
     async def delete_favorite(

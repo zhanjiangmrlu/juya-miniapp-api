@@ -7,9 +7,11 @@ from typing import Protocol, cast
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from juya_miniapp_api.infrastructure.observability.metrics import DELETION_FAILURES
 from juya_miniapp_api.modules.accounts.domain import OutboxEvent, OutboxStatus
 
 OutboxHandler = Callable[[OutboxEvent], Awaitable[None]]
+PROCESSING_LEASE = timedelta(minutes=5)
 
 
 class OutboxStore(Protocol):
@@ -51,6 +53,8 @@ class OutboxDispatcher:
             except Exception:
                 attempts = event.attempt_count + 1
                 dead = attempts >= self._max_attempts
+                if dead and event.event_type == "ACCOUNT_DELETION_CLEANUP":
+                    DELETION_FAILURES.labels(stage="cross_domain_cleanup").inc()
                 next_attempt_at = None
                 if not dead:
                     next_attempt_at = now + self._base_delay * (2 ** (attempts - 1))
@@ -75,8 +79,9 @@ class InMemoryOutboxStore:
             claimed: list[OutboxEvent] = []
             for event in self.events.values():
                 due = event.next_attempt_at is None or event.next_attempt_at <= now
-                if event.status in {"PENDING", "FAILED"} and due:
+                if event.status in {"PENDING", "FAILED", "PROCESSING"} and due:
                     event.status = "PROCESSING"
+                    event.next_attempt_at = now + PROCESSING_LEASE
                     claimed.append(event)
                     if len(claimed) >= limit:
                         break
@@ -99,6 +104,8 @@ class InMemoryOutboxStore:
     ) -> None:
         async with self._lock:
             event = self.events[event_id]
+            if event.status != "PROCESSING":
+                return
             event.status = "DEAD" if dead else "FAILED"
             event.attempt_count = attempt_count
             event.next_attempt_at = next_attempt_at
@@ -130,7 +137,8 @@ class SQLAlchemyOutboxStore:
                         text(
                             "SELECT id, event_type, aggregate_id, payload, status, "
                             "attempt_count, next_attempt_at, created_at, processed_at "
-                            "FROM miniapp_outbox WHERE status IN ('PENDING','FAILED') "
+                            "FROM miniapp_outbox WHERE status IN "
+                            "('PENDING','FAILED','PROCESSING') "
                             "AND (next_attempt_at IS NULL OR next_attempt_at <= :now) "
                             "ORDER BY created_at LIMIT :limit FOR UPDATE SKIP LOCKED"
                         ),
@@ -143,8 +151,14 @@ class SQLAlchemyOutboxStore:
             ids = [str(row["id"]) for row in rows]
             for event_id in ids:
                 await session.execute(
-                    text("UPDATE miniapp_outbox SET status = 'PROCESSING' WHERE id = :event_id"),
-                    {"event_id": event_id},
+                    text(
+                        "UPDATE miniapp_outbox SET status = 'PROCESSING', "
+                        "next_attempt_at = :lease_until WHERE id = :event_id"
+                    ),
+                    {
+                        "event_id": event_id,
+                        "lease_until": _database_datetime(now + PROCESSING_LEASE),
+                    },
                 )
             return [self._from_row(row) for row in rows]
 
@@ -170,7 +184,8 @@ class SQLAlchemyOutboxStore:
             await session.execute(
                 text(
                     "UPDATE miniapp_outbox SET status = :status, attempt_count = :attempt_count, "
-                    "next_attempt_at = :next_attempt_at WHERE id = :event_id"
+                    "next_attempt_at = :next_attempt_at WHERE id = :event_id "
+                    "AND status = 'PROCESSING'"
                 ),
                 {
                     "event_id": event_id,

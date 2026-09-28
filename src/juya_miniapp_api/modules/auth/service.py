@@ -39,6 +39,10 @@ class SessionService:
             self._field_cipher.lookup_hmac(identity.openid),
             now,
         )
+        if user.status in {"DELETING", "DELETED"}:
+            raise AppError("ACCOUNT_DELETING", "账号注销正在处理中", 409)
+        if user.status == "SUSPENDED":
+            raise AppError("ACCOUNT_SUSPENDED", "账号暂不可用", 403)
         session_id = new_ulid(now)
         refresh_token = self._new_refresh_token(session_id)
         refresh_expires_at = now + REFRESH_TOKEN_LIFETIME

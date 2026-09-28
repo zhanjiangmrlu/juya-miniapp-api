@@ -248,17 +248,15 @@ class SQLAlchemyAccountRepository:
 
     async def begin_due_deletions(self, now: datetime) -> list[DeletionRequest]:
         async with self._session_factory() as session, session.begin():
-            rows = (
+            candidates = (
                 (
                     await session.execute(
                         text(
-                            "SELECT d.id, d.public_id, d.user_id, u.public_id AS public_user_id, "
-                            "d.requested_at, d.effective_at, d.revoked_at, d.completed_at, "
-                            "d.status "
+                            "SELECT d.public_id AS request_id, u.public_id AS public_user_id "
                             "FROM account_deletion_request d "
                             "JOIN user_account u ON u.id = d.user_id "
                             "WHERE d.status = 'PENDING' AND d.effective_at <= :now "
-                            "ORDER BY d.id LIMIT 100 FOR UPDATE SKIP LOCKED"
+                            "ORDER BY d.id LIMIT 100"
                         ),
                         {"now": _database_datetime(now)},
                     )
@@ -267,10 +265,31 @@ class SQLAlchemyAccountRepository:
                 .all()
             )
             started: list[DeletionRequest] = []
-            for row in rows:
-                internal_id = int(row["user_id"])
-                request_id = str(row["public_id"])
-                public_user_id = str(row["public_user_id"])
+            for candidate in candidates:
+                public_user_id = str(candidate["public_user_id"])
+                request_id = str(candidate["request_id"])
+                internal_id = await self._lock_user(session, public_user_id)
+                row = (
+                    (
+                        await session.execute(
+                            text(
+                                "SELECT id, public_id, requested_at, effective_at, revoked_at, "
+                                "completed_at, status FROM account_deletion_request "
+                                "WHERE public_id = :request_id AND user_id = :user_id "
+                                "AND status = 'PENDING' AND effective_at <= :now FOR UPDATE"
+                            ),
+                            {
+                                "request_id": request_id,
+                                "user_id": internal_id,
+                                "now": _database_datetime(now),
+                            },
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
+                if row is None:
+                    continue
                 await session.execute(
                     text("UPDATE account_deletion_request SET status = 'DELETING' WHERE id = :id"),
                     {"id": row["id"]},

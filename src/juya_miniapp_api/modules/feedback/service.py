@@ -5,7 +5,16 @@ from juya_miniapp_api.shared.errors import AppError
 
 
 class FeedbackClient(Protocol):
-    async def create_feedback(self, **payload: object) -> dict[str, Any]: ...
+    async def create_feedback(
+        self,
+        *,
+        user_id: str,
+        category: str,
+        description: str,
+        source: dict[str, Any],
+        screenshots: list[str],
+        idempotency_key: str,
+    ) -> dict[str, Any]: ...
 
     async def list_feedback(self, user_id: str) -> list[dict[str, Any]]: ...
 

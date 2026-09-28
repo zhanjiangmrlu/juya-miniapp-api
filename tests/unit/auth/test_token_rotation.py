@@ -92,3 +92,15 @@ async def test_deletion_pending_status_is_returned_without_identity_data() -> No
     assert session.user.status == "DELETION_PENDING"
     assert session.account_summary == {"deletion_pending": True}
     assert "openid" not in repr(session)
+
+
+@pytest.mark.asyncio
+async def test_deleting_account_cannot_create_a_new_session() -> None:
+    service, repository, _jwt = make_service()
+    repository.next_user_status = "DELETING"
+
+    with pytest.raises(AppError) as blocked:
+        await service.login_with_wechat("code-1", "iphone", NOW)
+
+    assert blocked.value.code == "ACCOUNT_DELETING"
+    assert not repository.sessions

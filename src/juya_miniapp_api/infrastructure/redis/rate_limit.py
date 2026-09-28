@@ -2,9 +2,38 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Any, Protocol
 
+from juya_miniapp_api.shared.errors import AppError
+
 
 class RedisScriptClient(Protocol):
     async def eval(self, script: str, numkeys: int, *keys_and_args: object) -> Any: ...
+
+
+class RateLimiter(Protocol):
+    async def allow(
+        self,
+        scope: str,
+        subject: str,
+        *,
+        limit: int,
+        window: timedelta,
+        now: datetime,
+    ) -> bool: ...
+
+
+async def enforce_rate_limit(
+    limiter: RateLimiter | None,
+    scope: str,
+    subject: str,
+    *,
+    limit: int,
+    window: timedelta,
+    now: datetime,
+) -> None:
+    if limiter is not None and not await limiter.allow(
+        scope, subject, limit=limit, window=window, now=now
+    ):
+        raise AppError("RATE_LIMITED", "请求过于频繁 请稍后再试", 429)
 
 
 _FIXED_WINDOW_SCRIPT = """

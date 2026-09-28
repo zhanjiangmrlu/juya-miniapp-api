@@ -1,0 +1,40 @@
+stages:
+  - verify
+  - image
+  - staging
+  - production
+
+verify:
+  stage: verify
+  script:
+    - uv sync --locked
+    - uv run ruff check .
+    - uv run ruff format --check .
+    - uv run mypy src
+    - python -c "import os; assert os.getenv('JUYA_TEST_DATABASE_URL'), 'CI MySQL URL is required'; assert os.getenv('JUYA_TEST_REDIS_URL'), 'CI Redis URL is required'"
+    - uv run pytest --cov=juya_miniapp_api --cov-report=term-missing --cov-fail-under=80
+
+build-and-scan:
+  stage: image
+  needs: [verify]
+  script:
+    - docker build --pull -t "$ACR_IMAGE:$CI_COMMIT_SHA" .
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL "$ACR_IMAGE:$CI_COMMIT_SHA"
+    - docker login -u "$ACR_USERNAME" -p "$ACR_PASSWORD" "$ACR_REGISTRY"
+    - docker push "$ACR_IMAGE:$CI_COMMIT_SHA"
+
+deploy-staging:
+  stage: staging
+  needs: [build-and-scan]
+  script:
+    - aliyun ecs RunCommand --RegionId "$STAGING_REGION" --InstanceId.1 "$STAGING_ECS_ID" --CommandId "$STAGING_DEPLOY_COMMAND_ID"
+    - pwsh ./scripts/smoke.ps1 "$STAGING_BASE_URL"
+
+approve-production:
+  stage: production
+  needs: [deploy-staging]
+  when: manual
+  script:
+    - aliyun ecs RunCommand --RegionId "$PRODUCTION_REGION" --InstanceId.1 "$PRODUCTION_CANARY_ID" --CommandId "$PRODUCTION_DEPLOY_COMMAND_ID"
+    - pwsh ./scripts/smoke.ps1 "$PRODUCTION_BASE_URL"
+    - aliyun ecs RunCommand --RegionId "$PRODUCTION_REGION" --InstanceId.1 "$PRODUCTION_BATCH_ID" --CommandId "$PRODUCTION_DEPLOY_COMMAND_ID"

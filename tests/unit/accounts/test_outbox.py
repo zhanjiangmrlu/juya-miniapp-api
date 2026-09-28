@@ -72,3 +72,51 @@ async def test_outbox_delivers_each_event_once() -> None:
     assert delivered == ["event-1"]
     assert event.status == "DELIVERED"
     assert event.processed_at == NOW
+
+
+@pytest.mark.asyncio
+async def test_processing_event_is_recovered_after_worker_lease_expires() -> None:
+    event = OutboxEvent(
+        "event-1",
+        "ACCOUNT_DELETION_CLEANUP",
+        "deletion-1",
+        {"user_id": "user-1"},
+        "PENDING",
+        0,
+        NOW,
+        NOW,
+    )
+    store = InMemoryOutboxStore([event])
+
+    assert [item.id for item in await store.claim_due(NOW, 10)] == ["event-1"]
+    assert await store.claim_due(NOW + timedelta(minutes=4), 10) == []
+    assert [item.id for item in await store.claim_due(NOW + timedelta(minutes=5), 10)] == [
+        "event-1"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_callback_wins_race_with_dispatch_failure_writeback() -> None:
+    event = OutboxEvent(
+        "event-1",
+        "ACCOUNT_DELETION_CLEANUP",
+        "deletion-1",
+        {"user_id": "user-1"},
+        "PENDING",
+        0,
+        NOW,
+        NOW,
+    )
+    store = InMemoryOutboxStore([event])
+    await store.claim_due(NOW, 10)
+
+    await store.mark_delivered(event.id, NOW)
+    await store.mark_failed(
+        event.id,
+        attempt_count=1,
+        next_attempt_at=NOW + timedelta(seconds=30),
+        dead=False,
+    )
+
+    assert event.status == "DELIVERED"
+    assert event.processed_at == NOW

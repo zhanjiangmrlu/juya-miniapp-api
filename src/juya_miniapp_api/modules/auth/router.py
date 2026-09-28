@@ -1,9 +1,12 @@
+import hashlib
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from juya_miniapp_api.infrastructure.observability.metrics import LOGIN_ATTEMPTS
+from juya_miniapp_api.infrastructure.redis.rate_limit import RateLimiter, enforce_rate_limit
 from juya_miniapp_api.modules.auth.domain import SessionTokens
 from juya_miniapp_api.modules.auth.service import SessionService
 
@@ -48,18 +51,46 @@ def create_auth_router(
     service: SessionService,
     *,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    rate_limiter: RateLimiter | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/session", tags=["session"])
 
     @router.post("/wechat")
-    async def login(payload: WechatLoginRequest, response: Response) -> dict[str, object]:
-        tokens = await service.login_with_wechat(payload.code, payload.device, clock())
+    async def login(
+        payload: WechatLoginRequest, request: Request, response: Response
+    ) -> dict[str, object]:
+        now = clock()
+        subject = request.client.host if request.client is not None else payload.device
+        await enforce_rate_limit(
+            rate_limiter,
+            "login",
+            subject,
+            limit=20,
+            window=timedelta(minutes=1),
+            now=now,
+        )
+        try:
+            tokens = await service.login_with_wechat(payload.code, payload.device, now)
+        except Exception:
+            LOGIN_ATTEMPTS.labels(outcome="failure").inc()
+            raise
+        LOGIN_ATTEMPTS.labels(outcome="success").inc()
         response.headers["Cache-Control"] = "no-store"
         return _response(tokens)
 
     @router.post("/refresh")
     async def refresh(payload: RefreshRequest, response: Response) -> dict[str, object]:
-        tokens = await service.refresh(payload.refresh_token, clock())
+        now = clock()
+        subject = hashlib.sha256(payload.refresh_token.encode()).hexdigest()[:24]
+        await enforce_rate_limit(
+            rate_limiter,
+            "refresh",
+            subject,
+            limit=10,
+            window=timedelta(minutes=1),
+            now=now,
+        )
+        tokens = await service.refresh(payload.refresh_token, now)
         response.headers["Cache-Control"] = "no-store"
         return _response(tokens)
 
