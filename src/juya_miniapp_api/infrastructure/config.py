@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="JUYA_", extra="ignore")
 
     environment: str = "local"
+    local_dev_mode: bool = False
     service_name: str = "juya-miniapp-api"
     log_level: str = "INFO"
     database_url: SecretStr | None = None

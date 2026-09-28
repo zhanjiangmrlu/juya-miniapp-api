@@ -10,6 +10,16 @@
 - Redis `7.x`
 - `juya-admin-api` 及其数据库迁移
 
+### 小程序本地联调
+
+不连接微信、OSS、MySQL、Redis 和 admin-api 时，可启动隔离的本地开发模式：
+
+```powershell
+./scripts/start-local.ps1
+```
+
+服务监听 `http://127.0.0.1:8000`，提供小程序 V1.3 页面所需的契约数据、可变反馈/消息状态、静音音频和本地上传接收端。该模式仅在 `JUYA_ENVIRONMENT=local|test` 且 `JUYA_LOCAL_DEV_MODE=true` 时启用，生产环境不会注册这些路由。
+
 安装锁定依赖：
 
 ```powershell
