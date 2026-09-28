@@ -22,6 +22,18 @@ async def test_live_health_returns_request_id() -> None:
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "service": "juya-miniapp-api"}
     assert response.headers["X-Request-ID"]
+    assert response.headers["traceparent"].startswith("00-")
+
+
+@pytest.mark.asyncio
+async def test_trace_context_is_propagated() -> None:
+    app = make_app()
+    traceparent = "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/health/live", headers={"traceparent": traceparent})
+
+    assert response.headers["traceparent"] == traceparent
 
 
 @pytest.mark.asyncio

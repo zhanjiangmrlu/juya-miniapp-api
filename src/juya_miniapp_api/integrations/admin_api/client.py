@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from juya_miniapp_api.infrastructure.observability.request_id import get_traceparent
 from juya_miniapp_api.infrastructure.security.service_hmac import sign_request
 from juya_miniapp_api.integrations.admin_api.schemas import (
     AccessProjection,
@@ -33,12 +34,14 @@ class AdminApiClient:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         nonce_factory: Callable[[], str] = lambda: secrets.token_urlsafe(18),
         request_id_factory: Callable[[], str | None] = lambda: None,
+        traceparent_factory: Callable[[], str | None] = get_traceparent,
     ) -> None:
         self._client = client
         self._secret = secret
         self._clock = clock
         self._nonce_factory = nonce_factory
         self._request_id_factory = request_id_factory
+        self._traceparent_factory = traceparent_factory
         self.timeout = httpx.Timeout(8.0, connect=2.0)
 
     async def get_modules(self) -> list[LearningModule]:
@@ -207,6 +210,9 @@ class AdminApiClient:
             request_id = self._request_id_factory()
             if request_id:
                 headers["X-Request-ID"] = request_id
+            traceparent = self._traceparent_factory()
+            if traceparent:
+                headers["traceparent"] = traceparent
             try:
                 response = await self._client.request(
                     method,
