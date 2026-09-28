@@ -1,0 +1,163 @@
+import json
+import secrets
+from collections.abc import Callable, Mapping, Sequence
+from datetime import UTC, datetime
+from typing import Any
+
+import httpx
+
+from juya_miniapp_api.infrastructure.security.service_hmac import sign_request
+from juya_miniapp_api.integrations.admin_api.schemas import (
+    AccessProjection,
+    EntitlementProjection,
+    LearningCatalog,
+    LearningModule,
+    SceneEntry,
+    SceneOpenResult,
+    SignedMedia,
+)
+from juya_miniapp_api.shared.errors import AppError
+
+
+class AdminApiUnavailable(AppError):
+    def __init__(self) -> None:
+        super().__init__("ADMIN_API_UNAVAILABLE", "内容与权益服务暂时不可用", 503)
+
+
+class AdminApiClient:
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        *,
+        secret: bytes,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        nonce_factory: Callable[[], str] = lambda: secrets.token_urlsafe(18),
+        request_id_factory: Callable[[], str | None] = lambda: None,
+    ) -> None:
+        self._client = client
+        self._secret = secret
+        self._clock = clock
+        self._nonce_factory = nonce_factory
+        self._request_id_factory = request_id_factory
+        self.timeout = httpx.Timeout(8.0, connect=2.0)
+
+    async def get_modules(self) -> list[LearningModule]:
+        payload = await self._request_json("GET", "/internal/v1/learning/modules")
+        return [LearningModule.model_validate(item) for item in payload.get("items", [])]
+
+    async def get_catalog(self, user_id: str, summary: Mapping[str, object]) -> LearningCatalog:
+        del summary
+        payload = await self._request_json(
+            "POST", "/internal/v1/learning/catalog", {"user_id": user_id}
+        )
+        return LearningCatalog(items=payload.get("items", []))
+
+    async def batch_access(self, user_id: str, scene_ids: Sequence[str]) -> list[AccessProjection]:
+        payload = await self._request_json(
+            "POST",
+            "/internal/v1/access/batch",
+            {"user_id": user_id, "scene_ids": list(scene_ids)},
+        )
+        return [AccessProjection.model_validate(item) for item in payload.get("items", [])]
+
+    async def open_scene(
+        self, user_id: str, scene_id: str, idempotency_key: str
+    ) -> SceneOpenResult:
+        payload = await self._request_json(
+            "POST",
+            f"/internal/v1/scenes/{scene_id}/open",
+            {"user_id": user_id},
+            idempotency_key=idempotency_key,
+        )
+        return SceneOpenResult.model_validate(payload)
+
+    async def get_entry(self, user_id: str, scene_id: str, entry_id: str) -> SceneEntry:
+        payload = await self._request_json(
+            "POST",
+            f"/internal/v1/scenes/{scene_id}/entries/{entry_id}",
+            {"user_id": user_id},
+        )
+        return SceneEntry.model_validate(payload)
+
+    async def get_signed_media(self, user_id: str, target_id: str) -> SignedMedia:
+        payload = await self._request_json(
+            "POST",
+            f"/internal/v1/media/{target_id}/signed-url",
+            {"user_id": user_id},
+        )
+        return SignedMedia.model_validate(payload)
+
+    async def get_entitlements(self, user_id: str) -> EntitlementProjection:
+        payload = await self._request_json(
+            "POST", "/internal/v1/entitlements", {"user_id": user_id}
+        )
+        return EntitlementProjection.model_validate(payload)
+
+    async def _request_json(
+        self,
+        method: str,
+        path: str,
+        payload: Mapping[str, object] | None = None,
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        body = (
+            b""
+            if payload is None
+            else json.dumps(
+                payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        retryable = method == "GET" or idempotency_key is not None
+        attempts = 2 if retryable else 1
+        for attempt in range(attempts):
+            now = self._clock()
+            timestamp = int(now.timestamp())
+            nonce = self._nonce_factory()
+            headers = {
+                "Content-Type": "application/json",
+                "X-Juya-Service": "juya-miniapp-api",
+                "X-Juya-Timestamp": str(timestamp),
+                "X-Juya-Nonce": nonce,
+                "X-Juya-Signature": sign_request(
+                    method, path, timestamp, nonce, body, self._secret
+                ),
+            }
+            if idempotency_key is not None:
+                headers["Idempotency-Key"] = idempotency_key
+            request_id = self._request_id_factory()
+            if request_id:
+                headers["X-Request-ID"] = request_id
+            try:
+                response = await self._client.request(
+                    method,
+                    path,
+                    content=body,
+                    headers=headers,
+                    timeout=self.timeout,
+                )
+            except httpx.TransportError as error:
+                if attempt + 1 < attempts:
+                    continue
+                raise AdminApiUnavailable() from error
+            if response.status_code >= 400:
+                self._raise_upstream_error(response)
+            value = response.json()
+            return value if isinstance(value, dict) else {"items": value}
+        raise AdminApiUnavailable()
+
+    @staticmethod
+    def _raise_upstream_error(response: httpx.Response) -> None:
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        code = payload.get("code") if isinstance(payload, dict) else None
+        safe_code = code if isinstance(code, str) else "ADMIN_API_ERROR"
+        if response.status_code >= 500:
+            raise AdminApiUnavailable()
+        message = payload.get("message") if isinstance(payload, dict) else None
+        safe_message = message if isinstance(message, str) else "下游请求被拒绝"
+        raise AppError(safe_code, safe_message, response.status_code)
