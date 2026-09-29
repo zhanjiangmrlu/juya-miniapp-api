@@ -206,7 +206,7 @@ class LocalDevState:
             "can_self_edit": True,
             "change_pending": False,
             "consent_version": "v1",
-            "contact_status": "VERIFIED",
+            "contact_status": "CONTACTED",
             "self_edit_count": 0,
             "wechat_id": "juya_english",
         }
@@ -296,7 +296,7 @@ def create_local_dev_router() -> APIRouter:
             "can_self_edit": edit_count < 1,
             "change_pending": False,
             "consent_version": payload.get("consent_version", "v1"),
-            "contact_status": "VERIFIED",
+            "contact_status": "CONTACTED",
             "self_edit_count": edit_count + 1,
             "wechat_id": payload.get("wechat_id", ""),
         }

@@ -4,16 +4,33 @@ from datetime import UTC, datetime
 from typing import Protocol, cast
 
 from sqlalchemy import text
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from juya_miniapp_api.modules.contacts.domain import (
+    AdminCorrectionRecord,
     ContactAuditEvent,
     ContactRecord,
+    ContactTimelineEvent,
     CorrectionRequest,
 )
 from juya_miniapp_api.shared.errors import AppError
 from juya_miniapp_api.shared.ids import new_ulid
+
+_SAFE_CONTACT_EVENT_TYPES = frozenset(
+    {
+        "CONTACT_CREATED",
+        "CONTACT_CONSENT_RECONFIRMED",
+        "CONTACT_CHANGED",
+        "CONTACT_WITHDRAWN",
+        "CONTACT_CORRECTION_CREATED",
+        "CONTACT_CORRECTION_APPROVED",
+        "CONTACT_CORRECTION_REJECTED",
+        "CONTACT_STATUS_CHANGED",
+        "CONTACT_CHANGE_VERIFIED",
+    }
+)
 
 
 class ContactRepository(Protocol):
@@ -37,11 +54,19 @@ class ContactRepository(Protocol):
         self, user_id: str, reason: str, now: datetime
     ) -> CorrectionRequest: ...
 
+    async def list_corrections(
+        self, status: str | None, page: int, page_size: int
+    ) -> tuple[tuple[AdminCorrectionRecord, ...], int]: ...
+
+    async def get_correction(self, correction_id: str) -> AdminCorrectionRecord | None: ...
+
     async def decide_correction(
         self,
         correction_id: str,
         decision: str,
         actor_id: str,
+        idempotency_key: str,
+        request_hash: str,
         now: datetime,
     ) -> CorrectionRequest: ...
 
@@ -56,7 +81,9 @@ class InMemoryContactRepository:
     def __init__(self) -> None:
         self.records: dict[str, ContactRecord] = {}
         self.corrections: dict[str, CorrectionRequest] = {}
+        self.admin_identities: dict[str, tuple[str, str | None]] = {}
         self.audit_events: list[ContactAuditEvent] = []
+        self.decision_idempotency: dict[tuple[str, str], tuple[str, str]] = {}
         self._lock = asyncio.Lock()
 
     async def get_contact(self, user_id: str) -> ContactRecord | None:
@@ -112,7 +139,7 @@ class InMemoryContactRepository:
                 self._audit(user_id, "CONTACT_CONSENT_RECONFIRMED", "USER", user_id, now)
                 return record
             if record.wechat_id_hmac is not None:
-                if record.contact_status in {"CONTACTED", "VERIFIED"} or record.verified_at:
+                if record.contact_status == "CONTACTED" or record.verified_at:
                     raise AppError(
                         "CONTACT_CORRECTION_REQUIRED",
                         "联系方式已核对 请提交更正申请",
@@ -190,14 +217,43 @@ class InMemoryContactRepository:
             self._audit(user_id, "CONTACT_CORRECTION_CREATED", "USER", user_id, now)
             return correction
 
+    async def list_corrections(
+        self, status: str | None, page: int, page_size: int
+    ) -> tuple[tuple[AdminCorrectionRecord, ...], int]:
+        corrections = [
+            item for item in self.corrections.values() if status is None or item.status == status
+        ]
+        corrections.sort(
+            key=lambda item: (item.created_at or datetime.min.replace(tzinfo=UTC), item.public_id),
+            reverse=True,
+        )
+        start = (page - 1) * page_size
+        records = tuple(
+            self._admin_correction(item) for item in corrections[start : start + page_size]
+        )
+        return records, len(corrections)
+
+    async def get_correction(self, correction_id: str) -> AdminCorrectionRecord | None:
+        correction = self.corrections.get(correction_id)
+        return self._admin_correction(correction) if correction is not None else None
+
     async def decide_correction(
         self,
         correction_id: str,
         decision: str,
         actor_id: str,
+        idempotency_key: str,
+        request_hash: str,
         now: datetime,
     ) -> CorrectionRequest:
         async with self._lock:
+            idempotency_scope = (actor_id, idempotency_key)
+            previous = self.decision_idempotency.get(idempotency_scope)
+            if previous is not None:
+                previous_hash, previous_correction_id = previous
+                if previous_hash != request_hash or previous_correction_id != correction_id:
+                    raise AppError("IDEMPOTENCY_KEY_REUSED", "幂等键已用于其他请求", 409)
+                return self.corrections[previous_correction_id]
             correction = self.corrections.get(correction_id)
             if correction is None:
                 raise AppError("CONTACT_CORRECTION_NOT_FOUND", "更正申请不存在", 404)
@@ -210,8 +266,9 @@ class InMemoryContactRepository:
                 record.self_edit_count = 0
                 record.verified_at = None
                 record.verified_by = None
-                if record.contact_status in {"CONTACTED", "VERIFIED"}:
+                if record.contact_status == "CONTACTED":
                     record.contact_status = "PENDING"
+            self.decision_idempotency[idempotency_scope] = (request_hash, correction_id)
             self._audit(
                 correction.user_id,
                 f"CONTACT_CORRECTION_{decision}",
@@ -227,12 +284,42 @@ class InMemoryContactRepository:
         async with self._lock:
             record = self._required(user_id)
             record.contact_status = status
-            if status == "VERIFIED":
-                record.verified_at = now
-                record.verified_by = actor_id
             record.updated_at = now
             self._audit(user_id, "CONTACT_STATUS_CHANGED", "ADMIN", actor_id, now)
             return record
+
+    def _admin_correction(self, correction: CorrectionRequest) -> AdminCorrectionRecord:
+        contact = self.records.get(correction.user_id)
+        juya_number, nickname = self.admin_identities.get(
+            correction.user_id, (correction.user_id, None)
+        )
+        timeline = tuple(
+            ContactTimelineEvent(
+                status=(
+                    self.records[correction.user_id].contact_status
+                    if correction.user_id in self.records
+                    else "NOT_PROVIDED"
+                ),
+                actor_type=event.actor_type,
+                actor_id=event.actor_id,
+                event_type=event.event_type,
+                occurred_at=event.occurred_at,
+            )
+            for event in self.audit_events
+            if event.user_id == correction.user_id
+        )
+        return AdminCorrectionRecord(
+            id=correction.public_id,
+            user_id=correction.user_id,
+            juya_number=juya_number,
+            nickname=nickname,
+            wechat_id_ciphertext=(None if contact is None else contact.wechat_id_ciphertext),
+            reason=correction.reason,
+            status=correction.status,
+            created_at=correction.created_at,
+            processed_at=correction.processed_at,
+            timeline=timeline,
+        )
 
     async def verify_change(self, user_id: str, actor_id: str, now: datetime) -> ContactRecord:
         async with self._lock:
@@ -365,7 +452,7 @@ class SQLAlchemyContactRepository:
                 count = record.self_edit_count
                 change_pending = record.change_pending
                 if record.wechat_id_hmac is not None:
-                    if record.contact_status in {"CONTACTED", "VERIFIED"} or record.verified_at:
+                    if record.contact_status == "CONTACTED" or record.verified_at:
                         raise AppError(
                             "CONTACT_CORRECTION_REQUIRED",
                             "联系方式已核对 请提交更正申请",
@@ -465,23 +552,41 @@ class SQLAlchemyContactRepository:
         except IntegrityError as error:
             raise AppError("CONTACT_CORRECTION_ACTIVE", "已有待处理的更正申请", 409) from error
 
-    async def decide_correction(
-        self,
-        correction_id: str,
-        decision: str,
-        actor_id: str,
-        now: datetime,
-    ) -> CorrectionRequest:
-        async with self._session_factory() as session, session.begin():
+    async def list_corrections(
+        self, status: str | None, page: int, page_size: int
+    ) -> tuple[tuple[AdminCorrectionRecord, ...], int]:
+        where = " WHERE r.status = :status" if status is not None else ""
+        parameters: dict[str, object] = {
+            "status": status,
+            "limit": page_size,
+            "offset": (page - 1) * page_size,
+        }
+        async with self._session_factory() as session:
+            total = int(
+                await session.scalar(
+                    text("SELECT COUNT(*) FROM contact_correction_request r" + where),
+                    parameters,
+                )
+                or 0
+            )
+            rows = (
+                (
+                    await session.execute(
+                        text(self._admin_correction_select() + where + self._admin_order_limit()),
+                        parameters,
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        return tuple(self._admin_correction_from_row(row, ()) for row in rows), total
+
+    async def get_correction(self, correction_id: str) -> AdminCorrectionRecord | None:
+        async with self._session_factory() as session:
             row = (
                 (
                     await session.execute(
-                        text(
-                            "SELECT r.user_id, r.reason, r.status, r.created_at, u.public_id "
-                            "FROM contact_correction_request r "
-                            "JOIN user_account u ON u.id = r.user_id "
-                            "WHERE r.public_id = :public_id FOR UPDATE"
-                        ),
+                        text(self._admin_correction_select() + " WHERE r.public_id = :public_id"),
                         {"public_id": correction_id},
                     )
                 )
@@ -489,47 +594,102 @@ class SQLAlchemyContactRepository:
                 .first()
             )
             if row is None:
-                raise AppError("CONTACT_CORRECTION_NOT_FOUND", "更正申请不存在", 404)
-            if row["status"] not in {"PENDING", "PROCESSING"}:
-                raise AppError("CONTACT_CORRECTION_DECIDED", "更正申请已处理", 409)
-            await session.execute(
-                text(
-                    "UPDATE contact_correction_request SET status = :decision, "
-                    "processed_at = :now WHERE public_id = :public_id"
-                ),
-                {
-                    "decision": decision,
-                    "now": _database_datetime(now),
-                    "public_id": correction_id,
-                },
-            )
-            if decision == "APPROVED":
+                return None
+            timeline = await self._load_timeline(session, int(row["internal_user_id"]))
+        return self._admin_correction_from_row(row, timeline)
+
+    async def decide_correction(
+        self,
+        correction_id: str,
+        decision: str,
+        actor_id: str,
+        idempotency_key: str,
+        request_hash: str,
+        now: datetime,
+    ) -> CorrectionRequest:
+        try:
+            async with self._session_factory() as session, session.begin():
+                replay = await self._load_decision_by_key(
+                    session, actor_id, idempotency_key, for_update=True
+                )
+                if replay is not None:
+                    return self._validate_replay(
+                        replay, correction_id=correction_id, request_hash=request_hash
+                    )
+                row = (
+                    (
+                        await session.execute(
+                            text(
+                                "SELECT r.user_id AS internal_user_id, r.reason, r.status, "
+                                "r.created_at, u.public_id AS user_public_id "
+                                "FROM contact_correction_request r "
+                                "JOIN user_account u ON u.id = r.user_id "
+                                "WHERE r.public_id = :public_id FOR UPDATE"
+                            ),
+                            {"public_id": correction_id},
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
+                if row is None:
+                    raise AppError("CONTACT_CORRECTION_NOT_FOUND", "更正申请不存在", 404)
+                if row["status"] not in {"PENDING", "PROCESSING"}:
+                    raise AppError("CONTACT_CORRECTION_DECIDED", "更正申请已处理", 409)
                 await session.execute(
                     text(
-                        "UPDATE user_contact SET self_edit_count = 0, verified_at = NULL, "
-                        "verified_by = NULL, contact_status = CASE "
-                        "WHEN contact_status IN ('CONTACTED','VERIFIED') THEN 'PENDING' "
-                        "ELSE contact_status END WHERE user_id = :user_id"
+                        "UPDATE contact_correction_request SET status = :decision, "
+                        "processed_at = :now, processed_by = :actor_id, "
+                        "decision_idempotency_key = :idempotency_key, "
+                        "decision_request_hash = :request_hash WHERE public_id = :public_id"
                     ),
-                    {"user_id": row["user_id"]},
+                    {
+                        "decision": decision,
+                        "now": _database_datetime(now),
+                        "actor_id": actor_id,
+                        "idempotency_key": idempotency_key,
+                        "request_hash": request_hash,
+                        "public_id": correction_id,
+                    },
                 )
-            await self._history(
-                session,
-                row["user_id"],
-                "PENDING",
-                "ADMIN",
-                actor_id,
-                now,
-                f"CONTACT_CORRECTION_{decision}",
-            )
-            return CorrectionRequest(
-                correction_id,
-                row["public_id"],
-                row["reason"],
-                decision,
-                _utc_datetime(row["created_at"]),
-                now,
-            )
+                if decision == "APPROVED":
+                    await session.execute(
+                        text(
+                            "UPDATE user_contact SET self_edit_count = 0, verified_at = NULL, "
+                            "verified_by = NULL, contact_status = CASE "
+                            "WHEN contact_status = 'CONTACTED' THEN 'PENDING' "
+                            "ELSE contact_status END WHERE user_id = :user_id"
+                        ),
+                        {"user_id": row["internal_user_id"]},
+                    )
+                await self._history(
+                    session,
+                    row["internal_user_id"],
+                    "PENDING",
+                    "ADMIN",
+                    actor_id,
+                    now,
+                    f"CONTACT_CORRECTION_{decision}",
+                )
+                return CorrectionRequest(
+                    correction_id,
+                    row["user_public_id"],
+                    row["reason"],
+                    decision,
+                    _utc_datetime(row["created_at"]),
+                    now,
+                )
+        except IntegrityError as error:
+            async with self._session_factory() as session:
+                replay = await self._load_decision_by_key(session, actor_id, idempotency_key)
+            if replay is None:
+                raise
+            try:
+                return self._validate_replay(
+                    replay, correction_id=correction_id, request_hash=request_hash
+                )
+            except AppError as replay_error:
+                raise replay_error from error
 
     async def update_status(
         self, user_id: str, status: str, actor_id: str, now: datetime
@@ -538,19 +698,14 @@ class SQLAlchemyContactRepository:
             internal_id = await self._lock_user(session, user_id)
             if await self._load_contact(session, user_id, for_update=True) is None:
                 raise AppError("CONTACT_NOT_FOUND", "联系方式不存在", 404)
-            verified = status == "VERIFIED"
             await session.execute(
                 text(
-                    "UPDATE user_contact SET contact_status = :status, "
-                    "verified_at = CASE WHEN :verified = 1 THEN :now ELSE verified_at END, "
-                    "verified_by = CASE WHEN :verified = 1 THEN :actor_id ELSE verified_by END, "
-                    "updated_at = :now WHERE user_id = :user_id"
+                    "UPDATE user_contact SET contact_status = :status, updated_at = :now "
+                    "WHERE user_id = :user_id"
                 ),
                 {
                     "status": status,
-                    "verified": verified,
                     "now": _database_datetime(now),
-                    "actor_id": actor_id,
                     "user_id": internal_id,
                 },
             )
@@ -641,6 +796,115 @@ class SQLAlchemyContactRepository:
             verified_at=_utc_datetime(row["verified_at"]),
             verified_by=row["verified_by"],
             updated_at=_utc_datetime(row["updated_at"]) or datetime.now(UTC),
+        )
+
+    @staticmethod
+    def _admin_correction_select() -> str:
+        return (
+            "SELECT r.id AS correction_internal_id, r.public_id AS correction_public_id, "
+            "r.user_id AS internal_user_id, r.reason, r.status, r.created_at, r.processed_at, "
+            "u.public_id AS user_public_id, u.juya_number, p.nickname, "
+            "c.wechat_id_ciphertext FROM contact_correction_request r "
+            "JOIN user_account u ON u.id = r.user_id "
+            "LEFT JOIN user_profile p ON p.user_id = u.id "
+            "LEFT JOIN user_contact c ON c.user_id = u.id"
+        )
+
+    @staticmethod
+    def _admin_order_limit() -> str:
+        return " ORDER BY r.created_at DESC, r.id DESC LIMIT :limit OFFSET :offset"
+
+    @staticmethod
+    def _admin_correction_from_row(
+        row: RowMapping, timeline: tuple[ContactTimelineEvent, ...]
+    ) -> AdminCorrectionRecord:
+        return AdminCorrectionRecord(
+            id=row["correction_public_id"],
+            user_id=row["user_public_id"],
+            juya_number=row["juya_number"],
+            nickname=row["nickname"],
+            wechat_id_ciphertext=row["wechat_id_ciphertext"],
+            reason=row["reason"],
+            status=row["status"],
+            created_at=_utc_datetime(row["created_at"]),
+            processed_at=_utc_datetime(row["processed_at"]),
+            timeline=timeline,
+        )
+
+    @staticmethod
+    async def _load_timeline(
+        session: AsyncSession, user_id: int
+    ) -> tuple[ContactTimelineEvent, ...]:
+        rows = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT status, actor_type, actor_id, occurred_at, note "
+                        "FROM contact_status_history WHERE user_id = :user_id "
+                        "ORDER BY occurred_at ASC, id ASC"
+                    ),
+                    {"user_id": user_id},
+                )
+            )
+            .mappings()
+            .all()
+        )
+        return tuple(
+            ContactTimelineEvent(
+                status=row["status"],
+                actor_type=row["actor_type"],
+                actor_id=row["actor_id"],
+                event_type=(
+                    row["note"] if row["note"] in _SAFE_CONTACT_EVENT_TYPES else "CONTACT_EVENT"
+                ),
+                occurred_at=_utc_datetime(row["occurred_at"]) or datetime.now(UTC),
+            )
+            for row in rows
+        )
+
+    @staticmethod
+    async def _load_decision_by_key(
+        session: AsyncSession,
+        actor_id: str,
+        idempotency_key: str,
+        *,
+        for_update: bool = False,
+    ) -> RowMapping | None:
+        suffix = " FOR UPDATE" if for_update else ""
+        return (
+            (
+                await session.execute(
+                    text(
+                        "SELECT r.public_id AS correction_public_id, r.reason, r.status, "
+                        "r.created_at, r.processed_at, r.decision_request_hash, "
+                        "u.public_id AS user_public_id FROM contact_correction_request r "
+                        "JOIN user_account u ON u.id = r.user_id "
+                        "WHERE r.processed_by = :actor_id "
+                        "AND r.decision_idempotency_key = :idempotency_key" + suffix
+                    ),
+                    {"actor_id": actor_id, "idempotency_key": idempotency_key},
+                )
+            )
+            .mappings()
+            .first()
+        )
+
+    @staticmethod
+    def _validate_replay(
+        row: RowMapping, *, correction_id: str, request_hash: str
+    ) -> CorrectionRequest:
+        if (
+            row["correction_public_id"] != correction_id
+            or row["decision_request_hash"] != request_hash
+        ):
+            raise AppError("IDEMPOTENCY_KEY_REUSED", "幂等键已用于其他请求", 409)
+        return CorrectionRequest(
+            public_id=row["correction_public_id"],
+            user_id=row["user_public_id"],
+            reason=row["reason"],
+            status=row["status"],
+            created_at=_utc_datetime(row["created_at"]),
+            processed_at=_utc_datetime(row["processed_at"]),
         )
 
     @staticmethod

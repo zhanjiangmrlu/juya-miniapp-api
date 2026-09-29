@@ -47,6 +47,43 @@ class CorrectionRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class ContactTimelineEvent:
+    status: str
+    actor_type: str
+    actor_id: str
+    event_type: str
+    occurred_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AdminCorrectionRecord:
+    id: str
+    user_id: str
+    juya_number: str
+    nickname: str | None
+    wechat_id_ciphertext: bytes | None = field(repr=False)
+    reason: str = field(repr=False)
+    status: str = "PENDING"
+    created_at: datetime | None = None
+    processed_at: datetime | None = None
+    timeline: tuple[ContactTimelineEvent, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class AdminCorrectionView:
+    id: str
+    user_id: str
+    juya_number: str
+    nickname: str | None
+    wechat_id: str | None = field(repr=False)
+    reason: str = field(repr=False)
+    status: str = "PENDING"
+    created_at: datetime | None = None
+    processed_at: datetime | None = None
+    timeline: tuple[ContactTimelineEvent, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ContactAuditEvent:
     user_id: str
     event_type: str

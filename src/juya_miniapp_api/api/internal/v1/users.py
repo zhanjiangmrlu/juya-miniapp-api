@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Header, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from juya_miniapp_api.infrastructure.security.service_hmac import ServicePrincipal
+from juya_miniapp_api.modules.contacts.domain import AdminCorrectionView
 from juya_miniapp_api.modules.contacts.service import ContactService
 from juya_miniapp_api.modules.users.router import serialize_me
 from juya_miniapp_api.modules.users.service import MeView, UserService
@@ -39,6 +40,14 @@ class CorrectionDecisionRequest(BaseModel):
     decision: str
 
 
+class CorrectionSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: str | None = Field(default=None, max_length=32)
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=100)
+
+
 def _no_store(response: Response) -> None:
     response.headers["Cache-Control"] = "no-store"
 
@@ -55,6 +64,30 @@ def _search_item(view: MeView) -> dict[str, object]:
         }
     )
     return serialized
+
+
+def _correction_body(view: AdminCorrectionView) -> dict[str, object]:
+    return {
+        "id": view.id,
+        "user_id": view.user_id,
+        "juya_number": view.juya_number,
+        "nickname": view.nickname,
+        "wechat_id": view.wechat_id,
+        "reason": view.reason,
+        "status": view.status,
+        "created_at": view.created_at,
+        "processed_at": view.processed_at,
+        "timeline": [
+            {
+                "status": item.status,
+                "actor_type": item.actor_type,
+                "actor_id": item.actor_id,
+                "event_type": item.event_type,
+                "occurred_at": item.occurred_at,
+            }
+            for item in view.timeline
+        ],
+    }
 
 
 def create_internal_users_router(
@@ -122,6 +155,34 @@ def create_internal_users_router(
         await contacts.verify_change(user_id, admin_id, clock())
         return serialize_me(await users.get_me(user_id))
 
+    @router.post("/contact-corrections/search")
+    async def search_contact_corrections(
+        payload: CorrectionSearchRequest,
+        response: Response,
+        _principal: Annotated[ServicePrincipal, Depends(service_dependency)],
+        _admin_id: Annotated[str, Header(alias="X-Admin-Id")],
+    ) -> dict[str, object]:
+        _no_store(response)
+        items, total = await contacts.list_corrections(
+            payload.status, payload.page, payload.page_size
+        )
+        return {
+            "items": [_correction_body(item) for item in items],
+            "total": total,
+            "page": payload.page,
+            "page_size": payload.page_size,
+        }
+
+    @router.get("/contact-corrections/{correction_id}")
+    async def contact_correction_detail(
+        correction_id: str,
+        response: Response,
+        _principal: Annotated[ServicePrincipal, Depends(service_dependency)],
+        _admin_id: Annotated[str, Header(alias="X-Admin-Id")],
+    ) -> dict[str, object]:
+        _no_store(response)
+        return _correction_body(await contacts.get_correction(correction_id))
+
     @router.post("/contact-corrections/{correction_id}/decision")
     async def decide_correction(
         correction_id: str,
@@ -129,10 +190,18 @@ def create_internal_users_router(
         response: Response,
         _principal: Annotated[ServicePrincipal, Depends(service_dependency)],
         admin_id: Annotated[str, Header(alias="X-Admin-Id")],
+        idempotency_key: Annotated[
+            str,
+            Header(alias="X-Idempotency-Key", min_length=1, max_length=128),
+        ],
     ) -> dict[str, object]:
         _no_store(response)
         correction = await contacts.decide_correction(
-            correction_id, payload.decision, admin_id, clock()
+            correction_id,
+            payload.decision,
+            admin_id,
+            idempotency_key,
+            clock(),
         )
         return {
             "id": correction.public_id,

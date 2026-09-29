@@ -46,7 +46,7 @@ async def test_initial_and_same_value_do_not_consume_edit_opportunity() -> None:
 async def test_real_change_is_allowed_once_and_returns_to_pending() -> None:
     service, repository = make_service()
     await service.save(USER_ID, "first-id", "privacy-v1", "PROFILE", NOW)
-    await service.update_status(USER_ID, "INVALID", "admin-1", NOW)
+    await service.update_status(USER_ID, "UNREACHABLE", "admin-1", NOW)
 
     changed = await service.save(
         USER_ID,
@@ -72,10 +72,10 @@ async def test_real_change_is_allowed_once_and_returns_to_pending() -> None:
 
 
 @pytest.mark.asyncio
-async def test_verified_contact_requires_one_active_correction_request() -> None:
+async def test_contacted_contact_requires_one_active_correction_request() -> None:
     service, _repository = make_service()
     await service.save(USER_ID, "first-id", "privacy-v1", "PROFILE", NOW)
-    await service.update_status(USER_ID, "VERIFIED", "admin-1", NOW)
+    await service.update_status(USER_ID, "CONTACTED", "admin-1", NOW)
 
     with pytest.raises(AppError) as direct_edit:
         await service.save(USER_ID, "second-id", "privacy-v1", "PROFILE", NOW)
@@ -86,9 +86,92 @@ async def test_verified_contact_requires_one_active_correction_request() -> None
         await service.request_correction(USER_ID, "再次申请", NOW)
     assert duplicate.value.code == "CONTACT_CORRECTION_ACTIVE"
 
-    await service.decide_correction(correction.public_id, "APPROVED", "admin-1", NOW)
+    await service.decide_correction(
+        correction.public_id,
+        "APPROVED",
+        "admin-1",
+        "approve-correction-1",
+        NOW,
+    )
     changed = await service.save(USER_ID, "second-id", "privacy-v1", "PROFILE", NOW)
     assert changed.self_edit_count == 1
+
+
+@pytest.mark.asyncio
+async def test_admin_lists_and_reads_corrections_without_inventing_new_wechat() -> None:
+    service, repository = make_service()
+    repository.admin_identities[USER_ID] = ("JY000000000001", "学习者")
+    await service.save(USER_ID, "current-wechat", "privacy-v1", "PROFILE", NOW)
+    correction = await service.request_correction(USER_ID, "微信号需要更正", NOW)
+
+    page, total = await service.list_corrections("PENDING", 1, 20)
+    detail = await service.get_correction(correction.public_id)
+
+    assert total == 1
+    assert page == (detail,)
+    assert detail.id == correction.public_id
+    assert detail.user_id == USER_ID
+    assert detail.juya_number == "JY000000000001"
+    assert detail.nickname == "学习者"
+    assert detail.wechat_id == "current-wechat"
+    assert detail.reason == "微信号需要更正"
+    assert detail.timeline[-1].event_type == "CONTACT_CORRECTION_CREATED"
+    assert not hasattr(detail, "new_wechat_id")
+
+
+@pytest.mark.asyncio
+async def test_correction_decision_replays_same_key_and_rejects_changed_request() -> None:
+    service, _repository = make_service()
+    await service.save(USER_ID, "current-wechat", "privacy-v1", "PROFILE", NOW)
+    correction = await service.request_correction(USER_ID, "微信号需要更正", NOW)
+
+    first = await service.decide_correction(
+        correction.public_id,
+        "APPROVED",
+        "admin-1",
+        "decision-key-1",
+        NOW,
+    )
+    replay = await service.decide_correction(
+        correction.public_id,
+        "APPROVED",
+        "admin-1",
+        "decision-key-1",
+        NOW + timedelta(minutes=1),
+    )
+
+    assert replay == first
+    with pytest.raises(AppError) as reused:
+        await service.decide_correction(
+            correction.public_id,
+            "REJECTED",
+            "admin-1",
+            "decision-key-1",
+            NOW + timedelta(minutes=2),
+        )
+    assert reused.value.code == "IDEMPOTENCY_KEY_REUSED"
+
+
+@pytest.mark.asyncio
+async def test_contact_status_uses_five_business_states_without_changing_verification() -> None:
+    service, _repository = make_service()
+    await service.save(USER_ID, "current-wechat", "privacy-v1", "PROFILE", NOW)
+
+    unreachable = await service.update_status(USER_ID, "UNREACHABLE", "admin-1", NOW)
+    do_not_contact = await service.update_status(
+        USER_ID, "DO_NOT_CONTACT", "admin-1", NOW + timedelta(minutes=1)
+    )
+
+    assert unreachable.verified_at is None
+    assert do_not_contact.contact_status == "DO_NOT_CONTACT"
+    assert do_not_contact.verified_at is None
+    with pytest.raises(AppError) as legacy_status:
+        await service.update_status(USER_ID, "VERIFIED", "admin-1", NOW)
+    assert legacy_status.value.code == "CONTACT_STATUS_INVALID"
+
+    verified = await service.verify_change(USER_ID, "admin-1", NOW + timedelta(minutes=2))
+    assert verified.contact_status == "DO_NOT_CONTACT"
+    assert verified.verified_at == NOW + timedelta(minutes=2)
 
 
 @pytest.mark.asyncio

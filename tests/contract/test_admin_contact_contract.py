@@ -62,3 +62,84 @@ async def test_admin_search_and_detail_expose_contact_only_on_no_store_internal_
     assert "openid" not in serialized.lower()
     assert "refresh_token" not in serialized.lower()
     assert query_string_search.status_code == 405
+
+
+@pytest.mark.asyncio
+async def test_admin_correction_routes_require_headers_and_never_leak_secret_fields() -> None:
+    users = InMemoryUserRepository()
+    users.add(USER_ID, "JY000000000001", nickname="学习者")
+    repository = InMemoryContactRepository()
+    repository.admin_identities[USER_ID] = ("JY000000000001", "学习者")
+    contacts = ContactService(
+        repository,
+        FieldCipher(b"k" * 32, b"h" * 32),
+    )
+    await contacts.save(USER_ID, "admin-visible-id", "privacy-v1", "PROFILE", NOW)
+    correction = await contacts.request_correction(USER_ID, "微信号需要更正", NOW)
+    user_service = UserService(users, contacts)
+
+    async def admin_service() -> ServicePrincipal:
+        return ServicePrincipal("juya-admin-api")
+
+    app = FastAPI()
+    install_error_handlers(app)
+    app.include_router(
+        create_internal_users_router(user_service, contacts, service_dependency=admin_service)
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        missing_admin = await client.post(
+            "/internal/v1/contact-corrections/search",
+            json={"status": "PENDING", "page": 1, "page_size": 20},
+        )
+        search = await client.post(
+            "/internal/v1/contact-corrections/search",
+            json={"status": "PENDING", "page": 1, "page_size": 20},
+            headers={"X-Admin-Id": "admin-1"},
+        )
+        detail = await client.get(
+            f"/internal/v1/contact-corrections/{correction.public_id}",
+            headers={"X-Admin-Id": "admin-1"},
+        )
+        missing_key = await client.post(
+            f"/internal/v1/contact-corrections/{correction.public_id}/decision",
+            json={"decision": "APPROVED"},
+            headers={"X-Admin-Id": "admin-1"},
+        )
+        decision = await client.post(
+            f"/internal/v1/contact-corrections/{correction.public_id}/decision",
+            json={"decision": "APPROVED"},
+            headers={
+                "X-Admin-Id": "admin-1",
+                "X-Idempotency-Key": "decision-key-1",
+            },
+        )
+        replay = await client.post(
+            f"/internal/v1/contact-corrections/{correction.public_id}/decision",
+            json={"decision": "APPROVED"},
+            headers={
+                "X-Admin-Id": "admin-1",
+                "X-Idempotency-Key": "decision-key-1",
+            },
+        )
+
+    assert missing_admin.status_code == 422
+    assert search.status_code == 200
+    assert search.headers["Cache-Control"] == "no-store"
+    assert search.json()["total"] == 1
+    assert search.json()["items"][0]["wechat_id"] == "admin-visible-id"
+    assert detail.status_code == 200
+    assert detail.headers["Cache-Control"] == "no-store"
+    assert detail.json()["reason"] == "微信号需要更正"
+    assert detail.json()["timeline"][-1]["event_type"] == "CONTACT_CORRECTION_CREATED"
+    assert missing_key.status_code == 422
+    assert decision.status_code == 200
+    assert decision.headers["Cache-Control"] == "no-store"
+    assert replay.status_code == 200
+    assert replay.json() == decision.json()
+    serialized = search.text + detail.text + decision.text
+    assert "new_wechat" not in serialized.lower()
+    assert "openid" not in serialized.lower()
+    assert "ciphertext" not in serialized.lower()
+    assert "hmac" not in serialized.lower()

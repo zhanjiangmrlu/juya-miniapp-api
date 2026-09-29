@@ -15,6 +15,7 @@ async def test_local_dev_mode_exposes_bootstrap_and_learning_contracts() -> None
         modules = await client.get("/api/v1/learning/modules")
         home = await client.get("/api/v1/home")
         scene = await client.post("/api/v1/scenes/scene-castle/open")
+        contact = await client.get("/api/v1/me/contact")
 
     assert login.status_code == 200
     assert login.json() == {
@@ -24,6 +25,7 @@ async def test_local_dev_mode_exposes_bootstrap_and_learning_contracts() -> None
     assert modules.json()["items"][0]["key"] == "scene_learning"
     assert home.json()["today_task"]["target_id"] == "scene-castle"
     assert scene.json()["scene"]["scene_id"] == "scene-castle"
+    assert contact.json()["contact_status"] == "CONTACTED"
 
 
 @pytest.mark.asyncio
