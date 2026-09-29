@@ -36,6 +36,8 @@ _SAFE_CONTACT_EVENT_TYPES = frozenset(
 class ContactRepository(Protocol):
     async def get_contact(self, user_id: str) -> ContactRecord | None: ...
 
+    async def get_contacts(self, user_ids: tuple[str, ...]) -> tuple[ContactRecord, ...]: ...
+
     async def find_user_by_hmac(self, lookup_hmac: bytes) -> str | None: ...
 
     async def save_contact(
@@ -88,6 +90,9 @@ class InMemoryContactRepository:
 
     async def get_contact(self, user_id: str) -> ContactRecord | None:
         return self.records.get(user_id)
+
+    async def get_contacts(self, user_ids: tuple[str, ...]) -> tuple[ContactRecord, ...]:
+        return tuple(self.records[user_id] for user_id in user_ids if user_id in self.records)
 
     async def find_user_by_hmac(self, lookup_hmac: bytes) -> str | None:
         for user_id, record in self.records.items():
@@ -369,6 +374,37 @@ class SQLAlchemyContactRepository:
     async def get_contact(self, user_id: str) -> ContactRecord | None:
         async with self._session_factory() as session:
             return await self._load_contact(session, user_id)
+
+    async def get_contacts(self, user_ids: tuple[str, ...]) -> tuple[ContactRecord, ...]:
+        if not user_ids:
+            return ()
+        placeholders: list[str] = []
+        parameters: dict[str, object] = {}
+        for index, user_id in enumerate(user_ids):
+            name = f"user_id_{index}"
+            placeholders.append(f":{name}")
+            parameters[name] = user_id
+        async with self._session_factory() as session:
+            rows = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT u.public_id, c.wechat_id_ciphertext, c.wechat_id_hmac, "
+                            "c.consent_version, c.consented_at, c.source, c.self_edit_count, "
+                            "c.withdrawn_at, c.change_pending, c.contact_status, c.verified_at, "
+                            "c.verified_by, c.updated_at FROM user_contact c "
+                            "JOIN user_account u ON u.id = c.user_id WHERE u.public_id IN ("
+                            + ",".join(placeholders)
+                            + ")"
+                        ),
+                        parameters,
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        by_user_id = {str(row["public_id"]): self._contact_from_row(row) for row in rows}
+        return tuple(by_user_id[user_id] for user_id in user_ids if user_id in by_user_id)
 
     async def find_user_by_hmac(self, lookup_hmac: bytes) -> str | None:
         async with self._session_factory() as session:
@@ -782,6 +818,10 @@ class SQLAlchemyContactRepository:
         )
         if row is None:
             return None
+        return SQLAlchemyContactRepository._contact_from_row(row)
+
+    @staticmethod
+    def _contact_from_row(row: RowMapping) -> ContactRecord:
         return ContactRecord(
             user_id=row["public_id"],
             wechat_id_ciphertext=row["wechat_id_ciphertext"],

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from juya_miniapp_api.infrastructure.security.service_hmac import ServicePrincipal
 from juya_miniapp_api.modules.contacts.domain import AdminCorrectionView
 from juya_miniapp_api.modules.contacts.service import ContactService
+from juya_miniapp_api.modules.learning.admin_projection import LearningOverviewRepository
 from juya_miniapp_api.modules.users.router import serialize_me
 from juya_miniapp_api.modules.users.service import MeView, UserService
 from juya_miniapp_api.shared.errors import AppError
@@ -33,6 +34,12 @@ class UserSearchRequest(BaseModel):
 class ContactStatusRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     status: str
+
+
+class ContactProjectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_ids: list[str] = Field(min_length=1, max_length=100)
 
 
 class CorrectionDecisionRequest(BaseModel):
@@ -93,6 +100,7 @@ def _correction_body(view: AdminCorrectionView) -> dict[str, object]:
 def create_internal_users_router(
     users: UserService,
     contacts: ContactService,
+    learning_overviews: LearningOverviewRepository,
     *,
     service_dependency: ServiceDependency,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
@@ -122,6 +130,30 @@ def create_internal_users_router(
     async def reject_query_string_search() -> None:
         raise AppError("METHOD_NOT_ALLOWED", "用户搜索只允许 POST", 405)
 
+    @router.post("/users/contact-projections")
+    async def contact_projections(
+        payload: ContactProjectionRequest,
+        response: Response,
+        _principal: Annotated[ServicePrincipal, Depends(service_dependency)],
+        _admin_id: Annotated[str, Header(alias="X-Admin-Id")],
+    ) -> dict[str, object]:
+        _no_store(response)
+        projected = await contacts.get_many(tuple(payload.user_ids))
+        return {
+            "contacts": [
+                {
+                    "user_id": item.user_id,
+                    "wechat_id": item.wechat_id,
+                    "contact_status": item.contact_status,
+                    "change_pending": item.change_pending,
+                    "verified_at": item.verified_at,
+                    "verified_by": item.verified_by,
+                    "updated_at": item.updated_at,
+                }
+                for item in projected
+            ]
+        }
+
     @router.get("/users/{user_id}")
     async def user_detail(
         user_id: str,
@@ -131,6 +163,21 @@ def create_internal_users_router(
     ) -> dict[str, object]:
         _no_store(response)
         return serialize_me(await users.get_me(user_id))
+
+    @router.get("/users/{user_id}/learning-overview")
+    async def learning_overview(
+        user_id: str,
+        response: Response,
+        _principal: Annotated[ServicePrincipal, Depends(service_dependency)],
+        _admin_id: Annotated[str, Header(alias="X-Admin-Id")],
+    ) -> dict[str, int]:
+        _no_store(response)
+        overview = await learning_overviews.get(user_id)
+        return {
+            "open_scene_completed_count": overview.open_scene_completed_count,
+            "learning_days": overview.learning_days,
+            "favorite_count": overview.favorite_count,
+        }
 
     @router.post("/users/{user_id}/contact-status")
     async def update_contact_status(

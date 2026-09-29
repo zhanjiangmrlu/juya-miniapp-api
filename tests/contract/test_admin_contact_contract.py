@@ -9,6 +9,7 @@ from juya_miniapp_api.infrastructure.security.field_cipher import FieldCipher
 from juya_miniapp_api.infrastructure.security.service_hmac import ServicePrincipal
 from juya_miniapp_api.modules.contacts.repository import InMemoryContactRepository
 from juya_miniapp_api.modules.contacts.service import ContactService
+from juya_miniapp_api.modules.learning.admin_projection import InMemoryLearningOverviewRepository
 from juya_miniapp_api.modules.users.repository import InMemoryUserRepository
 from juya_miniapp_api.modules.users.service import UserService
 from juya_miniapp_api.shared.errors import install_error_handlers
@@ -34,7 +35,12 @@ async def test_admin_search_and_detail_expose_contact_only_on_no_store_internal_
     app = FastAPI()
     install_error_handlers(app)
     app.include_router(
-        create_internal_users_router(user_service, contacts, service_dependency=admin_service)
+        create_internal_users_router(
+            user_service,
+            contacts,
+            InMemoryLearningOverviewRepository(),
+            service_dependency=admin_service,
+        )
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -84,7 +90,12 @@ async def test_admin_correction_routes_require_headers_and_never_leak_secret_fie
     app = FastAPI()
     install_error_handlers(app)
     app.include_router(
-        create_internal_users_router(user_service, contacts, service_dependency=admin_service)
+        create_internal_users_router(
+            user_service,
+            contacts,
+            InMemoryLearningOverviewRepository(),
+            service_dependency=admin_service,
+        )
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -143,3 +154,78 @@ async def test_admin_correction_routes_require_headers_and_never_leak_secret_fie
     assert "openid" not in serialized.lower()
     assert "ciphertext" not in serialized.lower()
     assert "hmac" not in serialized.lower()
+
+
+@pytest.mark.asyncio
+async def test_admin_batch_contact_projection_preserves_order_and_learning_returns_counts() -> None:
+    second_user_id = "01K00000000000000000000002"
+    users = InMemoryUserRepository()
+    users.add(USER_ID, "JY000000000001", nickname="学习者一")
+    users.add(second_user_id, "JY000000000002", nickname="学习者二")
+    contacts = ContactService(
+        InMemoryContactRepository(),
+        FieldCipher(b"k" * 32, b"h" * 32),
+    )
+    await contacts.save(USER_ID, "first-contact", "privacy-v1", "PROFILE", NOW)
+    await contacts.save(second_user_id, "second-contact", "privacy-v1", "PROFILE", NOW)
+    overviews = InMemoryLearningOverviewRepository()
+    overviews.open_scene_completion_events.extend(
+        [(USER_ID, "scene-1"), (USER_ID, "scene-1"), (USER_ID, "scene-2")]
+    )
+    overviews.checkins.extend([(USER_ID, NOW.date()), (USER_ID, NOW.date())])
+    overviews.favorite_entries.extend([(USER_ID, "favorite-1"), (USER_ID, "favorite-2")])
+
+    async def admin_service() -> ServicePrincipal:
+        return ServicePrincipal("juya-admin-api")
+
+    app = FastAPI()
+    install_error_handlers(app)
+    app.include_router(
+        create_internal_users_router(
+            UserService(users, contacts),
+            contacts,
+            overviews,
+            service_dependency=admin_service,
+        )
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        projections = await client.post(
+            "/internal/v1/users/contact-projections",
+            json={"user_ids": [second_user_id, "missing-user", USER_ID]},
+            headers={"X-Admin-Id": "admin-1"},
+        )
+        overview = await client.get(
+            f"/internal/v1/users/{USER_ID}/learning-overview",
+            headers={"X-Admin-Id": "admin-1"},
+        )
+        oversized = await client.post(
+            "/internal/v1/users/contact-projections",
+            json={"user_ids": [f"user-{index}" for index in range(101)]},
+            headers={"X-Admin-Id": "admin-1"},
+        )
+
+    assert projections.status_code == 200
+    assert projections.headers["Cache-Control"] == "no-store"
+    assert [item["user_id"] for item in projections.json()["contacts"]] == [
+        second_user_id,
+        USER_ID,
+    ]
+    assert projections.json()["contacts"][0] == {
+        "user_id": second_user_id,
+        "wechat_id": "second-contact",
+        "contact_status": "PENDING",
+        "change_pending": False,
+        "verified_at": None,
+        "verified_by": None,
+        "updated_at": NOW.isoformat().replace("+00:00", "Z"),
+    }
+    assert overview.status_code == 200
+    assert overview.headers["Cache-Control"] == "no-store"
+    assert overview.json() == {
+        "open_scene_completed_count": 2,
+        "learning_days": 1,
+        "favorite_count": 2,
+    }
+    assert oversized.status_code == 422

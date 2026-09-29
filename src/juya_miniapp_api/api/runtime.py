@@ -51,6 +51,9 @@ from juya_miniapp_api.modules.feedback.router import create_feedback_router
 from juya_miniapp_api.modules.feedback.service import FeedbackService
 from juya_miniapp_api.modules.learning.access_router import create_content_access_router
 from juya_miniapp_api.modules.learning.access_service import AccessService, SQLAlchemyOpenHistory
+from juya_miniapp_api.modules.learning.admin_projection import (
+    SQLAlchemyLearningOverviewRepository,
+)
 from juya_miniapp_api.modules.learning.catalog_service import CatalogService
 from juya_miniapp_api.modules.learning.repository import SQLAlchemyLearningRepository
 from juya_miniapp_api.modules.learning.router import create_learning_router
@@ -161,6 +164,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
     contact_service = ContactService(SQLAlchemyContactRepository(sessions), field_cipher)
     user_service = UserService(SQLAlchemyUserRepository(sessions), contact_service)
     learning_repository = SQLAlchemyLearningRepository(sessions)
+    learning_overviews = SQLAlchemyLearningOverviewRepository(sessions)
     learning_service = LearningService(learning_repository)
     catalog_service = CatalogService(admin, cache)
     access_service = AccessService(admin, SQLAlchemyOpenHistory(learning_repository))
@@ -213,6 +217,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         create_internal_users_router(
             user_service,
             contact_service,
+            learning_overviews,
             service_dependency=current_service,
         ),
         create_internal_messages_router(

@@ -39,6 +39,11 @@ class ContactService:
         record = await self._repository.get_contact(user_id)
         return self._view(record) if record is not None else None
 
+    async def get_many(self, user_ids: tuple[str, ...]) -> tuple[ContactView, ...]:
+        if len(user_ids) > 100:
+            raise AppError("CONTACT_PROJECTION_LIMIT", "批量查询最多支持100个用户", 422)
+        return tuple(self._view(record) for record in await self._repository.get_contacts(user_ids))
+
     async def find_user_by_wechat_id(self, wechat_id: str) -> str | None:
         normalized = normalize_wechat_id(wechat_id)
         if not _WECHAT_ID.fullmatch(normalized):
