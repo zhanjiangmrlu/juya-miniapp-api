@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="JUYA_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="JUYA_", extra="ignore", env_ignore_empty=True)
 
     environment: str = "local"
     local_dev_mode: bool = False

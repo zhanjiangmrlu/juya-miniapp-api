@@ -30,6 +30,19 @@ class ResolutionRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=300)
 
 
+class FeedbackUploadCredentialResponse(BaseModel):
+    host: str
+    key: str
+    fields: dict[str, str]
+    content_type: str
+    max_bytes: int
+    expires_at: datetime
+    # Existing response fields remain additive-compatible; clients submit V4 fields.
+    policy: str
+    signature: str
+    access_key_id: str
+
+
 def create_feedback_router(
     service: FeedbackService,
     uploads: OssUploadService,
@@ -69,7 +82,7 @@ def create_feedback_router(
             idempotency_key,
         )
 
-    @router.post("/uploads")
+    @router.post("/uploads", response_model=FeedbackUploadCredentialResponse)
     async def feedback_upload(
         user_id: Annotated[str, Depends(user_dependency)],
         content_type: Annotated[str, Query(alias="content_type")],

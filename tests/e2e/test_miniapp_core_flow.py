@@ -29,6 +29,16 @@ def runtime_settings() -> Settings:
     )
 
 
+def test_oss_upload_openapi_describes_v4_fields() -> None:
+    app = create_app(runtime_settings())
+    schema = app.openapi()
+    response = schema["paths"]["/api/v1/feedback/uploads"]["post"]["responses"]["200"]
+    reference = response["content"]["application/json"]["schema"]["$ref"]
+    credential = schema["components"]["schemas"][reference.rsplit("/", 1)[-1]]
+    assert credential["properties"]["fields"]["additionalProperties"]["type"] == "string"
+    assert "fields" in credential["required"]
+
+
 @pytest.mark.asyncio
 async def test_runtime_exposes_the_complete_public_and_internal_route_manifest() -> None:
     app = create_app(runtime_settings())
