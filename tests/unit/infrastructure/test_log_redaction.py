@@ -40,3 +40,17 @@ def test_logging_filter_redacts_message_arguments() -> None:
     assert SensitiveDataFilter().filter(record)
     assert "secret" not in record.getMessage()
     assert "login" in record.getMessage()
+
+
+def test_nested_sdk_security_token_spelling_is_redacted() -> None:
+    record = logging.LogRecord(
+        "application",
+        logging.INFO,
+        __file__,
+        1,
+        "credentials=%s",
+        ({"Credentials": {"SecurityToken": "synthetic-private-token"}},),
+        None,
+    )
+    SensitiveDataFilter().filter(record)
+    assert "synthetic-private-token" not in record.getMessage()

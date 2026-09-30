@@ -191,6 +191,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
             if settings.oss_session_token
             else None,
             expires_at=settings.oss_credentials_expires_at,
+            from_environment=True,
         ),
     )
     account_service = AccountLifecycleService(
