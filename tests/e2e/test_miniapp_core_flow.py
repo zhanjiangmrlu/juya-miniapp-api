@@ -22,6 +22,8 @@ def runtime_settings() -> Settings:
         wechat_app_secret="wechat-secret",
         oss_endpoint="oss-cn-test.aliyuncs.com",
         oss_bucket="juya-test",
+        oss_region="cn-test",
+        oss_expected_bucket="juya-test",
         oss_access_key_id="oss-key",
         oss_access_key_secret="oss-secret",
     )

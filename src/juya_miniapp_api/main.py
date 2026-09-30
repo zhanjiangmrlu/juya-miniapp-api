@@ -19,6 +19,10 @@ def create_app(
     readiness_probe: ReadinessProbe | None = None,
 ) -> FastAPI:
     runtime_settings = settings or Settings()
+    if runtime_settings.environment not in {"local", "test"}:
+        runtime_settings.validate_oss_configuration()
+        if not runtime_settings.application_configured():
+            raise RuntimeError("Production application configuration is incomplete")
     configure_logging(runtime_settings.log_level)
     app = FastAPI(title="Juya Miniapp API", version="0.1.0")
     app.state.settings = runtime_settings

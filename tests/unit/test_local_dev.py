@@ -16,6 +16,7 @@ async def test_local_dev_mode_exposes_bootstrap_and_learning_contracts() -> None
         home = await client.get("/api/v1/home")
         scene = await client.post("/api/v1/scenes/scene-castle/open")
         contact = await client.get("/api/v1/me/contact")
+        upload = await client.post("/api/v1/feedback/uploads?content_type=image/png")
 
     assert login.status_code == 200
     assert login.json() == {
@@ -26,6 +27,7 @@ async def test_local_dev_mode_exposes_bootstrap_and_learning_contracts() -> None
     assert home.json()["today_task"]["target_id"] == "scene-castle"
     assert scene.json()["scene"]["scene_id"] == "scene-castle"
     assert contact.json()["contact_status"] == "CONTACTED"
+    assert upload.json()["fields"]["Content-Type"] == "image/png"
 
 
 @pytest.mark.asyncio
@@ -59,9 +61,5 @@ async def test_local_dev_mode_preserves_mutable_feedback_and_message_state() -> 
 @pytest.mark.asyncio
 async def test_local_dev_mode_is_rejected_outside_local_environment() -> None:
     """生产环境不得因误设本地开关而暴露开发用接口。"""
-    app = create_app(Settings(environment="production", local_dev_mode=True))
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/api/v1/home")
-
-    assert response.status_code == 404
+    with pytest.raises(RuntimeError, match="OSS"):
+        create_app(Settings(environment="production", local_dev_mode=True))

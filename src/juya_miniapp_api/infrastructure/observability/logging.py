@@ -1,4 +1,5 @@
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -15,25 +16,36 @@ _SENSITIVE_KEYS = {
     "description",
     "feedback_body",
     "body",
-}
-_SIGNED_QUERY_KEYS = {
-    "signature",
+    "accesskeyid",
+    "accesskeysecret",
+    "access_key_id",
+    "access_key_secret",
+    "oss_access_key_id",
+    "oss_access_key_secret",
+    "security_token",
+    "session_token",
+    "x-oss-security-token",
     "x-oss-signature",
     "x-oss-credential",
+    "signature",
+    "policy",
     "ossaccesskeyid",
-    "security-token",
 }
+_SIGNED_QUERY_KEYS = _SENSITIVE_KEYS | {"security-token"}
 
 
 def _redact_url(value: str) -> str:
-    if "?" not in value:
-        return value
-    parts = urlsplit(value)
-    query = [
-        (key, "[REDACTED]" if key.casefold() in _SIGNED_QUERY_KEYS else item)
-        for key, item in parse_qsl(parts.query, keep_blank_values=True)
-    ]
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+    def redact(match: re.Match[str]) -> str:
+        parts = urlsplit(match.group())
+        query = [
+            (key, "[REDACTED]" if key.casefold() in _SIGNED_QUERY_KEYS else item)
+            for key, item in parse_qsl(parts.query, keep_blank_values=True)
+        ]
+        return urlunsplit(
+            (parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)
+        )
+
+    return re.sub(r'https?://[^\s\'"]+', redact, value)
 
 
 def redact_value(value: Any, *, key: str | None = None) -> Any:
@@ -54,12 +66,30 @@ def redact_value(value: Any, *, key: str | None = None) -> Any:
 
 class SensitiveDataFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        if record.args:
-            record.args = redact_value(record.args)
+        if record.name.startswith(("alibabacloud", "aliyun", "oss.")):
+            # SDK exceptions can embed complete request bodies and credentials.
+            record.msg = "OSS SDK event (details suppressed)"
+            record.args = ()
+            record.exc_info = None
+            record.exc_text = None
+        else:
+            record.msg = redact_value(record.msg)
+            if record.args:
+                record.args = redact_value(record.args)
         for key, value in tuple(record.__dict__.items()):
-            if key not in {"msg", "args"}:
+            if key not in {"msg", "args", "exc_info"}:
                 record.__dict__[key] = redact_value(value, key=key)
         return True
+
+
+def protect_sdk_logging() -> None:
+    for logger in logging.Logger.manager.loggerDict.values():
+        if isinstance(logger, logging.Logger) and logger.name.startswith(
+            ("alibabacloud", "aliyun")
+        ):
+            logger.addFilter(SensitiveDataFilter())
+            for handler in logger.handlers:
+                handler.addFilter(SensitiveDataFilter())
 
 
 def configure_logging(level: str) -> None:
@@ -69,3 +99,4 @@ def configure_logging(level: str) -> None:
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level.upper())
+    protect_sdk_logging()

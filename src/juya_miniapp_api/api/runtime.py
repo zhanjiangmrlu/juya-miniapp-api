@@ -31,6 +31,7 @@ from juya_miniapp_api.infrastructure.security.service_hmac import (
     verify_request_signature,
 )
 from juya_miniapp_api.integrations.admin_api.client import AdminApiClient
+from juya_miniapp_api.integrations.oss.credentials import ControlledCredentialsProvider
 from juya_miniapp_api.integrations.oss.upload import OssUploadService
 from juya_miniapp_api.integrations.wechat.client import WechatAuthClient
 from juya_miniapp_api.modules.accounts.repository import SQLAlchemyAccountRepository
@@ -97,6 +98,7 @@ class RuntimeResources:
 
 
 def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResources:
+    settings.validate_oss_configuration()
     database_url = _required(settings.database_url, "database_url")
     redis_url = _required(settings.redis_url, "redis_url")
     engine = create_engine(database_url)
@@ -173,10 +175,23 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
     message_service = MessageService(SQLAlchemyMessageRepository(sessions))
     feedback_service = FeedbackService(admin)
     uploads = OssUploadService(
-        endpoint=_required(settings.oss_endpoint, "oss_endpoint"),
+        endpoint=settings.oss_endpoint or f"https://oss-{settings.oss_region}.aliyuncs.com",
         bucket=_required(settings.oss_bucket, "oss_bucket"),
-        access_key_id=_required(settings.oss_access_key_id, "oss_access_key_id"),
-        access_key_secret=_required(settings.oss_access_key_secret, "oss_access_key_secret"),
+        region=_required(settings.oss_region, "oss_region"),
+        credentials_provider=ControlledCredentialsProvider(
+            mode=settings.oss_credentials_mode,
+            role_name=settings.oss_ram_role_name,
+            access_key_id=settings.oss_access_key_id.get_secret_value()
+            if settings.oss_access_key_id
+            else None,
+            access_key_secret=settings.oss_access_key_secret.get_secret_value()
+            if settings.oss_access_key_secret
+            else None,
+            security_token=settings.oss_session_token.get_secret_value()
+            if settings.oss_session_token
+            else None,
+            expires_at=settings.oss_credentials_expires_at,
+        ),
     )
     account_service = AccountLifecycleService(
         SQLAlchemyAccountRepository(sessions), session_service.revoke_all

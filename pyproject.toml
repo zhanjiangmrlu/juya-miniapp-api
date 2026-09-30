@@ -9,6 +9,8 @@ description = "WeChat mini-program API for Juya English."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+  "alibabacloud-credentials>=1.0,<2",
+  "alibabacloud-oss-v2>=1.4,<2",
   "asyncmy>=0.2.10,<1",
   "celery>=5.4,<6",
   "cryptography>=44,<47",

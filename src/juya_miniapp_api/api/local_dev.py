@@ -476,6 +476,13 @@ def create_local_dev_router() -> APIRouter:
             "max_bytes": 5_242_880,
             "policy": "local-policy",
             "signature": "local-signature",
+            "fields": {
+                "key": "feedback/local-user/local-image.jpg",
+                "Content-Type": request.query_params.get("content_type", "image/jpeg"),
+                "policy": "local-policy",
+                "x-oss-signature-version": "OSS4-HMAC-SHA256",
+                "x-oss-signature": "local-signature",
+            },
         }
 
     @router.post("/local-dev/uploads")
