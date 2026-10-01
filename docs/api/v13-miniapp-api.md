@@ -11,11 +11,11 @@
 
 | 类别 | 数量 | 说明 |
 |---|---:|---|
-| 小程序业务接口 | 42 | /api/v1 下的登录、用户、学习、收藏、消息、反馈和隐私接口 |
+| 小程序业务接口 | 43 | /api/v1 下的登录、用户、学习、收藏、消息、反馈和隐私接口 |
 | 内部服务接口 | 12 | /internal/v1 下的后台服务调用接口 |
 | 健康检查 | 2 | /health/live、/health/ready |
 | 监控指标 | 1 | /internal/metrics |
-| 合计 | 57 | 不含 FastAPI 自动生成的文档页面 |
+| 合计 | 58 | 57 个 OpenAPI 操作及 1 个不进入 OpenAPI 的监控接口 |
 
 FastAPI 还自动提供以下开发辅助地址：
 
@@ -1254,3 +1254,70 @@ POST /api/v1/me/contact/prompt-exposures 接收合法固定入口与Idempotency-
 | POST | `/internal/v1/users/{user_id}/deletion-cleanup-result` |
 | GET | `/health/live` |
 | GET | `/health/ready` |
+
+
+
+<!-- V13_CURRENT_INVENTORY -->
+## 2026-10-01 当前接口清单
+
+源码 OpenAPI 操作数：57。头像上传只授予临时目录；保存资料时校验归属与真实图片字节，再固定到私有头像目录。
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| POST | `/api/v1/session/wechat` | Login |
+| POST | `/api/v1/session/refresh` | Refresh |
+| POST | `/api/v1/session/logout` | Logout |
+| POST | `/api/v1/me/avatar/upload-policy` | Avatar Upload Policy |
+| GET | `/api/v1/me` | Get Me |
+| PATCH | `/api/v1/me/profile` | Update Profile |
+| POST | `/api/v1/me/contact/prompt-exposures` | Prompt Exposure |
+| GET | `/api/v1/me/contact` | Get Contact |
+| PUT | `/api/v1/me/contact` | Save Contact |
+| DELETE | `/api/v1/me/contact` | Withdraw Contact |
+| POST | `/api/v1/me/contact/corrections` | Create Correction |
+| PUT | `/api/v1/scenes/{scene_id}/progress` | Save Progress |
+| POST | `/api/v1/scenes/{scene_id}/complete` | Complete |
+| GET | `/api/v1/scenes/{scene_id}/result` | Result |
+| GET | `/api/v1/history/scenes` | History |
+| GET | `/api/v1/me/checkins/summary` | Summary |
+| GET | `/api/v1/home` | Home |
+| GET | `/api/v1/learning/modules` | Modules |
+| GET | `/api/v1/learning/catalog` | Learning Catalog |
+| GET | `/api/v1/learning/open-history` | Open History |
+| POST | `/api/v1/scenes/{scene_id}/open` | Open Scene |
+| GET | `/api/v1/scenes/{scene_id}/entries/{entry_id}` | Scene Entry |
+| POST | `/api/v1/media/{target_id}/signed-url` | Signed Media |
+| GET | `/api/v1/scenes/{scene_id}/resources/{resource_id}/signed-url` | Signed Resource |
+| GET | `/api/v1/me/entitlements` | Entitlements |
+| GET | `/api/v1/favorites` | Favorites |
+| POST | `/api/v1/favorites` | Create Favorite |
+| GET | `/api/v1/reviews/queue` | Review Queue |
+| GET | `/api/v1/favorites/{favorite_id}` | Favorite Detail |
+| DELETE | `/api/v1/favorites/{favorite_id}` | Delete Favorite |
+| POST | `/api/v1/reviews` | Create Review |
+| POST | `/api/v1/reviews/{review_id}/complete` | Complete Review |
+| GET | `/api/v1/messages` | Messages |
+| POST | `/api/v1/messages/{message_id}/read` | Read Message |
+| GET | `/api/v1/feedback` | List Feedback |
+| POST | `/api/v1/feedback` | Create Feedback |
+| POST | `/api/v1/feedback/uploads` | Feedback Upload |
+| GET | `/api/v1/feedback/{feedback_id}` | Feedback Detail |
+| POST | `/api/v1/feedback/{feedback_id}/supplements` | Supplement |
+| POST | `/api/v1/feedback/{feedback_id}/resolution` | Resolution |
+| DELETE | `/api/v1/me/learning-data` | Clear Learning Data |
+| POST | `/api/v1/me/deletion` | Request Deletion |
+| POST | `/api/v1/me/deletion/revoke` | Revoke Deletion |
+| POST | `/internal/v1/users/search` | Search Users |
+| GET | `/internal/v1/users/search` | Reject Query String Search |
+| POST | `/internal/v1/users/contact-projections` | Contact Projections |
+| GET | `/internal/v1/users/{user_id}` | User Detail |
+| GET | `/internal/v1/users/{user_id}/learning-overview` | Learning Overview |
+| POST | `/internal/v1/users/{user_id}/contact-status` | Update Contact Status |
+| POST | `/internal/v1/users/{user_id}/contact/verify-change` | Verify Contact Change |
+| POST | `/internal/v1/contact-corrections/search` | Search Contact Corrections |
+| GET | `/internal/v1/contact-corrections/{correction_id}` | Contact Correction Detail |
+| POST | `/internal/v1/contact-corrections/{correction_id}/decision` | Decide Correction |
+| POST | `/internal/v1/users/{user_id}/messages` | Create Message |
+| POST | `/internal/v1/users/{user_id}/deletion-cleanup-result` | Record Cleanup Result |
+| GET | `/health/live` | Live |
+| GET | `/health/ready` | Ready |

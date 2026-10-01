@@ -31,6 +31,7 @@ from juya_miniapp_api.infrastructure.security.service_hmac import (
     verify_request_signature,
 )
 from juya_miniapp_api.integrations.admin_api.client import AdminApiClient
+from juya_miniapp_api.integrations.oss.avatar import AvatarStore
 from juya_miniapp_api.integrations.oss.credentials import ControlledCredentialsProvider
 from juya_miniapp_api.integrations.oss.upload import OssUploadService
 from juya_miniapp_api.integrations.wechat.client import WechatAuthClient
@@ -164,7 +165,6 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         secret=_required(settings.internal_hmac_secret, "internal_hmac_secret").encode(),
     )
     contact_service = ContactService(SQLAlchemyContactRepository(sessions), field_cipher)
-    user_service = UserService(SQLAlchemyUserRepository(sessions), contact_service)
     learning_repository = SQLAlchemyLearningRepository(sessions)
     learning_overviews = SQLAlchemyLearningOverviewRepository(sessions)
     catalog_service = CatalogService(admin, cache)
@@ -194,13 +194,22 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
             from_environment=True,
         ),
     )
+    avatar_store = AvatarStore(
+        region=_required(settings.oss_region, "oss_region"),
+        bucket=_required(settings.oss_bucket, "oss_bucket"),
+        endpoint=settings.oss_endpoint,
+        credentials_provider=uploads._credentials,
+    )
+    user_service = UserService(
+        SQLAlchemyUserRepository(sessions), contact_service, avatar_verifier=avatar_store.confirm
+    )
     account_service = AccountLifecycleService(
         SQLAlchemyAccountRepository(sessions), session_service.revoke_all
     )
 
     for router in (
         create_auth_router(session_service, rate_limiter=rate_limiter),
-        create_users_router(user_service, user_dependency=current_user),
+        create_users_router(user_service, user_dependency=current_user, uploads=uploads),
         create_contacts_router(
             contact_service,
             user_dependency=current_user,
@@ -249,7 +258,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
 
     async def readiness() -> Mapping[str, bool]:
         try:
-            checks = dict(await check_minimum_schema_version(sessions, 15))
+            checks = dict(await check_minimum_schema_version(sessions, 16))
         except Exception:
             checks = {"mysql": False, "schema": False}
         try:

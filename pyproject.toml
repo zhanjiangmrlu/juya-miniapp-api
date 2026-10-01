@@ -16,6 +16,7 @@ dependencies = [
   "cryptography>=44,<47",
   "fastapi>=0.115,<1",
   "httpx>=0.28,<1",
+  "pillow>=12,<13",
   "prometheus-client>=0.21,<1",
   "pydantic-settings>=2.7,<3",
   "pyjwt>=2.10,<3",

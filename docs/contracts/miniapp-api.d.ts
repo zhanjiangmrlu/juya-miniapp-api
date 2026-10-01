@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/avatar/upload-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Avatar Upload Policy */
+        post: operations["avatar_upload_policy_api_v1_me_avatar_upload_policy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -875,6 +892,37 @@ export interface components {
             /** Duration Ms */
             duration_ms: number;
         };
+        /** AvatarUploadCredentialResponse */
+        AvatarUploadCredentialResponse: {
+            /** Host */
+            host: string;
+            /** Key */
+            key: string;
+            /** Fields */
+            fields: {
+                [key: string]: string;
+            };
+            /** Content Type */
+            content_type: string;
+            /** Max Bytes */
+            max_bytes: number;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Policy */
+            policy: string;
+            /** Signature */
+            signature: string;
+            /** Access Key Id */
+            access_key_id: string;
+        };
+        /** AvatarUploadRequest */
+        AvatarUploadRequest: {
+            /** Content Type */
+            content_type: string;
+        };
         /** CleanupResultRequest */
         CleanupResultRequest: {
             /** Deletion Request Id */
@@ -1450,6 +1498,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    avatar_upload_policy_api_v1_me_avatar_upload_policy_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvatarUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarUploadCredentialResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

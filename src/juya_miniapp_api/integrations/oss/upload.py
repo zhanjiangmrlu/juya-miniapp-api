@@ -53,6 +53,12 @@ class OssUploadService:
         self._clock = clock
 
     def create_feedback_upload(self, user_id: str, content_type: str) -> dict[str, object]:
+        return self._create_upload(user_id, content_type, "feedback")
+
+    def create_avatar_upload(self, user_id: str, content_type: str) -> dict[str, object]:
+        return self._create_upload(user_id, content_type, "uploads/avatars")
+
+    def _create_upload(self, user_id: str, content_type: str, namespace: str) -> dict[str, object]:
         if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", user_id) is None:
             raise AppError("FEEDBACK_UPLOAD_USER_INVALID", "用户标识无效", 422)
         extensions = {
@@ -77,12 +83,13 @@ class OssUploadService:
         expires_at = now + timedelta(seconds=ttl)
         date = now.strftime("%Y%m%d")
         credential = f"{credentials.access_key_id}/{date}/{self._region}/oss/aliyun_v4_request"
-        object_key = f"feedback/{user_id}/{new_ulid(now)}.{extension}"
+        object_key = f"{namespace}/{user_id}/{new_ulid(now)}.{extension}"
         policy: dict[str, Any] = {
             "expiration": expires_at.isoformat().replace("+00:00", "Z"),
             "conditions": [
                 {"bucket": self._bucket},
                 {"key": object_key},
+                {"x-oss-forbid-overwrite": "true"},
                 {"Content-Type": content_type.lower()},
                 {"x-oss-signature-version": "OSS4-HMAC-SHA256"},
                 {"x-oss-credential": credential},
@@ -101,6 +108,7 @@ class OssUploadService:
         signature = hmac.new(signing_key, encoded_policy.encode(), hashlib.sha256).hexdigest()
         fields = {
             "key": object_key,
+            "x-oss-forbid-overwrite": "true",
             "policy": encoded_policy,
             "Content-Type": content_type.lower(),
             "x-oss-signature-version": "OSS4-HMAC-SHA256",

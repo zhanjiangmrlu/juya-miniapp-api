@@ -1,6 +1,8 @@
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+from juya_miniapp_api.integrations.oss.avatar import owned_avatar_key
 from juya_miniapp_api.modules.contacts.domain import ContactView
 from juya_miniapp_api.modules.contacts.service import ContactService
 from juya_miniapp_api.modules.users.models import UserProfile
@@ -15,9 +17,16 @@ class MeView:
 
 
 class UserService:
-    def __init__(self, repository: UserRepository, contacts: ContactService) -> None:
+    def __init__(
+        self,
+        repository: UserRepository,
+        contacts: ContactService,
+        *,
+        avatar_verifier: Callable[[str, str], Awaitable[str]] | None = None,
+    ) -> None:
         self._repository = repository
         self._contacts = contacts
+        self._avatar_verifier = avatar_verifier
 
     async def get_me(self, public_id: str) -> MeView:
         profile = await self._repository.get_profile(public_id)
@@ -35,8 +44,12 @@ class UserService:
         cleaned_nickname = nickname.strip() if nickname else None
         if cleaned_nickname == "":
             cleaned_nickname = None
-        if avatar_object_key and "://" in avatar_object_key:
-            raise AppError("AVATAR_OBJECT_KEY_INVALID", "头像对象键无效", 422)
+        if avatar_object_key:
+            if not owned_avatar_key(public_id, avatar_object_key):
+                raise AppError("AVATAR_OBJECT_KEY_INVALID", "头像对象键无效", 422)
+            if self._avatar_verifier is None:
+                raise AppError("AVATAR_STORAGE_UNAVAILABLE", "头像校验暂不可用", 503)
+            avatar_object_key = await self._avatar_verifier(public_id, avatar_object_key)
         profile = await self._repository.update_profile(
             public_id, cleaned_nickname, avatar_object_key, now
         )

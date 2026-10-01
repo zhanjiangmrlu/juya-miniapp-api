@@ -4,8 +4,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 
+from juya_miniapp_api.integrations.oss.upload import OssUploadService
 from juya_miniapp_api.modules.contacts.domain import ContactView
-from juya_miniapp_api.modules.users.schemas import ProfileUpdate
+from juya_miniapp_api.modules.users.schemas import (
+    AvatarUploadCredentialResponse,
+    AvatarUploadRequest,
+    ProfileUpdate,
+)
 from juya_miniapp_api.modules.users.service import MeView, UserService
 
 UserDependency = Callable[[], Awaitable[str]]
@@ -47,9 +52,21 @@ def create_users_router(
     service: UserService,
     *,
     user_dependency: UserDependency,
+    uploads: OssUploadService | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["me"])
+
+    @router.post("/me/avatar/upload-policy", response_model=AvatarUploadCredentialResponse)
+    async def avatar_upload_policy(
+        payload: AvatarUploadRequest,
+        user_id: Annotated[str, Depends(user_dependency)],
+    ) -> dict[str, object]:
+        from juya_miniapp_api.shared.errors import AppError
+
+        if uploads is None:
+            raise AppError("AVATAR_STORAGE_UNAVAILABLE", "头像上传暂不可用", 503)
+        return uploads.create_avatar_upload(user_id, payload.content_type)
 
     @router.get("/me")
     async def get_me(

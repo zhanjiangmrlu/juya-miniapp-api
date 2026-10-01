@@ -128,3 +128,29 @@ $env:JUYA_TEST_REDIS_URL = "redis://..."
 云效的 verify 阶段会强制要求两个测试 URL，并要求目标 MySQL 已执行 admin-api schema 迁移；缺少真实基础设施或总覆盖率低于 80% 时流水线直接失败，不允许以 skipped 结果发布。
 
 V1.3 当前接口见 [接口文档](docs/api/v13-miniapp-api.md)、[实际 OpenAPI 快照](docs/contracts/miniapp-api.json) 与 [生成类型](docs/contracts/miniapp-api.d.ts)：56 个 OpenAPI 操作及 1 个隐藏 metrics。Ruff、格式、mypy 与隔离 MySQL/Redis 测试 102 passed/1 skipped 通过。真实跨服务场景、资源授权及暂停权益验证见 [交付记录](../juya-admin-api/docs/implementation/v13-content/evidence.md)；小程序前端及微信真机验收延期。
+
+
+## V1.3 统一主站刷新（2026-10-01）
+
+当前本地统一主站：后台 <http://127.0.0.1:5173/>，管理 API <http://127.0.0.1:8000/docs>，用户 API <http://127.0.0.1:8001/docs>。两个 API 使用真实共享 MySQL/Redis，schema 最低版本16。
+
+已有本机 Docker 栈刷新源码并保留运行时配置：
+
+```powershell
+cd D:\个人\juya\juya-admin-api
+uv run python scripts/refresh-v13-local.py
+Invoke-RestMethod http://127.0.0.1:8000/health/ready
+Invoke-RestMethod http://127.0.0.1:8001/health/ready
+```
+
+该脚本已在本机实际执行，重建统一镜像、迁移并刷新两个 API、管理内容/领域 Worker、管理 Beat 和用户 Worker。它读取既有本地容器环境，不写 `.env` 或输出凭据；依赖既有管理栈及用户 API 环境，不能代替首次安装。直接运行默认 Compose up 可能重新采用默认配置，当前带 OSS 配置的栈用本节刷新命令。
+
+停止但保留数据库卷：
+
+```powershell
+cd D:\个人\juya\juya-admin-api
+docker stop juya-main-mini-api juya-main-mini-worker
+docker compose -f docker-compose.dev.yml stop
+```
+
+前端保留现有5173终端；如未运行，在 `juya-admin` 执行 `pnpm dev --host 127.0.0.1 --port 5173 --strictPort`，停止按 Ctrl+C。服务异常先分别检查两个 ready 与容器状态。完整验收与外部边界见[统一验收](../juya-admin-api/docs/implementation/v13-unified/acceptance.md).

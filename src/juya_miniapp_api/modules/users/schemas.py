@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -6,6 +8,23 @@ class ProfileUpdate(BaseModel):
 
     nickname: str | None = Field(default=None, max_length=64)
     avatar_object_key: str | None = Field(default=None, max_length=512)
+
+
+class AvatarUploadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    content_type: str = Field(min_length=1, max_length=64)
+
+
+class AvatarUploadCredentialResponse(BaseModel):
+    host: str
+    key: str
+    fields: dict[str, str]
+    content_type: str
+    max_bytes: int
+    expires_at: datetime
+    policy: str
+    signature: str
+    access_key_id: str
 
 
 class ContactSaveRequest(BaseModel):

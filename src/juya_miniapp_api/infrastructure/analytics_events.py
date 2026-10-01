@@ -64,6 +64,7 @@ EVENT_METRICS = {
     "OPEN_ALL_COMPLETED": "OPEN_ALL_COMPLETIONS",
     "CONTACT_PROMPT_EXPOSED": "CONTACT_EXPOSURES",
     "CONTACT_SUBMITTED": "CONTACT_SUBMISSIONS",
+    "CONTACT_CHANGED": "CONTACT_CHANGES",
     "CONTACT_WITHDRAWN": "CONTACT_WITHDRAWALS",
     "CONTACT_STATUS_CHANGED": "CONTACT_STATES",
     "FORMAL_GRANTED": "FORMAL_ENTITLEMENTS",
@@ -100,6 +101,7 @@ PAYLOAD_FIELDS = frozenset(
         "cohort_day",
         "started_day",
         "created_day",
+        "contact_cohort",
     }
 )
 
@@ -110,7 +112,10 @@ def validate_event(event_type: str, dimension: str, payload: Mapping[str, object
     if set(payload) - PAYLOAD_FIELDS:
         raise ValueError("Analytics payload contains unsupported personal fields")
     for key, value in payload.items():
-        if key in {"cohort_day", "started_day", "created_day"}:
+        if key == "contact_cohort":
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{32}", value):
+                raise ValueError("Analytics contact cohort must be anonymous random hex")
+        elif key in {"cohort_day", "started_day", "created_day"}:
             if not isinstance(value, str):
                 raise ValueError("Analytics cohort must be an ISO day")
             date.fromisoformat(value)

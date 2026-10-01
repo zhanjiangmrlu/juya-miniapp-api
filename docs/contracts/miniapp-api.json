@@ -125,6 +125,65 @@
         }
       }
     },
+    "/api/v1/me/avatar/upload-policy": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Avatar Upload Policy",
+        "operationId": "avatar_upload_policy_api_v1_me_avatar_upload_policy_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvatarUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadCredentialResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/me": {
       "get": {
         "tags": [
@@ -3236,6 +3295,79 @@
           "duration_ms"
         ],
         "title": "AudioReference"
+      },
+      "AvatarUploadCredentialResponse": {
+        "properties": {
+          "host": {
+            "type": "string",
+            "title": "Host"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Fields"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "title": "Max Bytes"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "policy": {
+            "type": "string",
+            "title": "Policy"
+          },
+          "signature": {
+            "type": "string",
+            "title": "Signature"
+          },
+          "access_key_id": {
+            "type": "string",
+            "title": "Access Key Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "host",
+          "key",
+          "fields",
+          "content_type",
+          "max_bytes",
+          "expires_at",
+          "policy",
+          "signature",
+          "access_key_id"
+        ],
+        "title": "AvatarUploadCredentialResponse"
+      },
+      "AvatarUploadRequest": {
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Content Type"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_type"
+        ],
+        "title": "AvatarUploadRequest"
       },
       "CleanupResultRequest": {
         "properties": {
