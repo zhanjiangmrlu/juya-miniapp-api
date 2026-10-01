@@ -173,7 +173,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
     favorite_repository = SQLAlchemyFavoriteRepository(sessions)
     favorite_service = FavoriteService(favorite_repository, access_service)
     message_service = MessageService(SQLAlchemyMessageRepository(sessions))
-    feedback_service = FeedbackService(admin)
+    feedback_service = FeedbackService(admin, require_review=settings.content_security_enabled)
     uploads = OssUploadService(
         endpoint=settings.oss_endpoint or f"https://oss-{settings.oss_region}.aliyuncs.com",
         bucket=_required(settings.oss_bucket, "oss_bucket"),

@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     environment: str = "local"
     local_dev_mode: bool = False
+    content_security_enabled: bool = False
     service_name: str = "juya-miniapp-api"
     log_level: str = "INFO"
     database_url: SecretStr | None = None

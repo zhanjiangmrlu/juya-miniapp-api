@@ -84,6 +84,10 @@ Compose 提供 MySQL、Redis、API 和 worker，但不会越权代替 admin-api 
 
 ## 验证
 
+本地、测试和生产默认 `JUYA_CONTENT_SECURITY_ENABLED=false`，不执行反馈文本内容过滤。
+反馈字数、截图数量、归属和登录权限校验保留。原过滤代码保留，后续设置该变量为
+`true` 并重启 API 即可恢复；管理服务的图片和音频审核开关见其 README。
+
 ```powershell
 uv sync --locked
 uv run ruff check .

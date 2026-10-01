@@ -35,8 +35,9 @@ class FeedbackClient(Protocol):
 
 
 class FeedbackService:
-    def __init__(self, client: FeedbackClient) -> None:
+    def __init__(self, client: FeedbackClient, *, require_review: bool = False) -> None:
         self._client = client
+        self._require_review = require_review
 
     async def create(
         self,
@@ -50,7 +51,8 @@ class FeedbackService:
         cleaned = description.strip()
         if not cleaned or len(cleaned) > 300:
             raise AppError("FEEDBACK_DESCRIPTION_INVALID", "反馈说明需为1至300字", 422)
-        ensure_safe_feedback(cleaned)
+        if self._require_review:
+            ensure_safe_feedback(cleaned)
         if len(screenshots) > 1:
             raise AppError("FEEDBACK_SCREENSHOT_LIMIT", "每条反馈最多上传1张截图", 422)
         expected_prefix = f"feedback/{user_id}/"

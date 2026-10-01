@@ -93,12 +93,29 @@ async def test_feedback_description_is_trimmed_and_limited_to_300_characters() -
 async def test_feedback_rejects_sensitive_contact_url_and_transaction_content(
     description: str,
 ) -> None:
-    service = FeedbackService(CapturingFeedbackClient())
+    service = FeedbackService(CapturingFeedbackClient(), require_review=True)
 
     with pytest.raises(AppError) as blocked:
         await service.create("user-1", "OTHER", description, {}, [], "command-1")
 
     assert blocked.value.code == "FEEDBACK_CONTENT_BLOCKED"
+
+
+@pytest.mark.asyncio
+async def test_review_disabled_keeps_feedback_length_and_screenshot_ownership_validation() -> None:
+    service = FeedbackService(CapturingFeedbackClient())
+    result = await service.create(
+        "user-1", "OTHER", "详情访问 https://lesson.example.com", {}, [], "review-off"
+    )
+    assert result["id"] == "feedback-1"
+    with pytest.raises(AppError) as invalid:
+        await service.create("user-1", "OTHER", "x" * 301, {}, [], "too-long")
+    assert invalid.value.code == "FEEDBACK_DESCRIPTION_INVALID"
+    with pytest.raises(AppError) as foreign:
+        await service.create(
+            "user-1", "OTHER", "说明", {}, ["feedback/user-2/image.png"], "foreign"
+        )
+    assert foreign.value.code == "FEEDBACK_SCREENSHOT_INVALID"
 
 
 def test_feedback_upload_credential_is_short_lived_and_user_scoped() -> None:
