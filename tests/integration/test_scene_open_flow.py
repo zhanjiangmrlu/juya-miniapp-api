@@ -23,7 +23,12 @@ async def test_local_open_history_is_written_only_after_authorized_scene_respons
                 "sources": ["LIMITED:grant-1"],
                 "earliest_expires_at": "2026-10-01T00:00:00Z",
                 "activated_at": "2026-09-28T21:30:00Z",
-                "scene": {"public_id": "scene-1", "title": "完整场景"},
+                "scene": {
+                    "scene_id": "scene-1",
+                    "revision_id": "rev-1",
+                    "content_version": 1,
+                    "content": {"title_zh": "完整场景"},
+                },
             },
         )
 

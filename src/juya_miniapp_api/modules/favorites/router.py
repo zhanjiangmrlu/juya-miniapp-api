@@ -17,9 +17,11 @@ class FavoriteRequest(BaseModel):
     entry_type: str
     text: str = Field(min_length=1, max_length=255)
     entry_stable_id: str = Field(min_length=1, max_length=64)
+    revision_id: str = Field(min_length=1, max_length=26)
+    entry_version: int = Field(ge=1)
     scene_id: str = Field(min_length=1, max_length=64)
-    sentence_snapshot: str = Field(min_length=1)
-    source_locator: str = Field(min_length=1, max_length=255)
+    sentence_snapshot: str = ""
+    source_locator: str = Field(min_length=1, max_length=228)
 
 
 class ReviewRequest(BaseModel):
@@ -41,6 +43,9 @@ def _favorite(value: FavoriteEntry) -> dict[str, object]:
                 "sentence_snapshot": item.sentence_snapshot,
                 "source_locator": item.source_locator,
                 "original_link": item.original_link,
+                "revision_id": item.revision_id,
+                "entry_version": item.entry_version,
+                "entry_snapshot": item.entry_snapshot,
             }
             for item in value.sources
         ],
@@ -71,6 +76,20 @@ def create_favorites_router(
             "has_more": len(items) > limit,
         }
 
+    @router.get("/reviews/queue")
+    async def review_queue(
+        user_id: Annotated[str, Depends(user_dependency)],
+        cursor: Annotated[str | None, Query()] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> dict[str, object]:
+        items = await repository.list_favorites(user_id, after_id=cursor, limit=limit + 1)
+        visible = items[:limit]
+        return {
+            "items": [_favorite(item) for item in visible],
+            "next_cursor": visible[-1].public_id if len(items) > limit else None,
+            "has_more": len(items) > limit,
+        }
+
     @router.post("/favorites", status_code=201)
     async def create_favorite(
         payload: FavoriteRequest,
@@ -86,6 +105,8 @@ def create_favorites_router(
                 payload.sentence_snapshot,
                 payload.source_locator,
                 clock(),
+                revision_id=payload.revision_id,
+                entry_version=payload.entry_version,
             )
         )
 
@@ -101,9 +122,7 @@ def create_favorites_router(
                 user_id, [source.scene_id for source in favorite.sources]
             )
             accessible_scene_ids = {
-                item.scene_id
-                for item in projections
-                if item.level not in {"NONE", "NO_ACCESS", "DENIED", "EXPIRED"}
+                item.scene_id for item in projections if item.level in {"OPEN", "FORMAL", "LIMITED"}
             }
         return _favorite(
             await service.detail(

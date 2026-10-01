@@ -13,6 +13,6 @@ def test_today_task_uses_fixed_priority_order() -> None:
     review_task = select_today_task([], [], reviews, history)
     assert review_task is not None
     assert review_task.kind == "FAVORITE_REVIEW"
-    assert review_task.card_ids == tuple(f"card-{index}" for index in range(10))
+    assert review_task.card_ids == tuple(f"card-{index}" for index in range(12))
     assert select_today_task([], [], [], history) == history[0]
     assert select_today_task([], [], [], []) is None

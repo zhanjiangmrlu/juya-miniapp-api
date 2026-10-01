@@ -167,11 +167,11 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
     user_service = UserService(SQLAlchemyUserRepository(sessions), contact_service)
     learning_repository = SQLAlchemyLearningRepository(sessions)
     learning_overviews = SQLAlchemyLearningOverviewRepository(sessions)
-    learning_service = LearningService(learning_repository)
     catalog_service = CatalogService(admin, cache)
+    learning_service = LearningService(learning_repository, catalog_service)
     access_service = AccessService(admin, SQLAlchemyOpenHistory(learning_repository))
     favorite_repository = SQLAlchemyFavoriteRepository(sessions)
-    favorite_service = FavoriteService(favorite_repository)
+    favorite_service = FavoriteService(favorite_repository, access_service)
     message_service = MessageService(SQLAlchemyMessageRepository(sessions))
     feedback_service = FeedbackService(admin)
     uploads = OssUploadService(
@@ -249,7 +249,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
 
     async def readiness() -> Mapping[str, bool]:
         try:
-            checks = dict(await check_minimum_schema_version(sessions, 1))
+            checks = dict(await check_minimum_schema_version(sessions, 15))
         except Exception:
             checks = {"mysql": False, "schema": False}
         try:

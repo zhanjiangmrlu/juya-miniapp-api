@@ -64,6 +64,14 @@ $env:JUYA_ENABLE_BEAT = "true"
 
 当前 schema 由相邻 `juya-admin-api/migrations` 管理。启动前先执行该项目的 Alembic 迁移；`/health/ready` 会拒绝低于最低版本的 schema。admin-api 需要提供学习目录、访问投影、场景 open、正文/媒体、权益、反馈和账号删除接口。注销使用 transactional outbox 和唯一事件 ID，admin-api 完成后回调 `/internal/v1/users/{user_id}/deletion-cleanup-result`。
 
+V1.3 最低 schema 为 `0015`。完整场景返回 `scene_id/revision_id/content_version/content`，其中 `content` 使用严格的共享正文类型；预览仅返回标题、系列、封面、简介等白名单元数据，不写入学习历史。词卡查询及收藏请求须携带 `revision_id/entry_version/source_locator`；收藏使用管理后端授权返回的词卡和句子快照，保留不同修订的历史来源。独立词卡发音可以为空。
+
+场景资源使用 `GET /api/v1/scenes/{scene_id}/resources/{resource_id}/signed-url?revision_id=...` 获取短期授权 URL。服务携带用户和修订信息通过 HMAC 委托管理后端校验引用关系；上游不可用、响应类型不符或 URL 已到期时拒绝访问。资源响应禁止缓存。
+
+复习队列通过 `GET /api/v1/reviews/queue?limit=50&cursor=...` 完整分页，单页最多 100 条，无总量上限。今日任务不再截断十条。联系方式提示曝光由认证的 `POST /api/v1/me/contact/prompt-exposures` 记录，须传 `Idempotency-Key`；小程序界面的曝光触发在后续前端批次接入。
+
+真实成功的学习、复习、收藏、联系方式及账号生命周期操作在同一事务中追加唯一业务事件。活跃用户定义为成功打开获授权场景、保存学习进度、首次完成场景或首次完成复习的用户；北京时间日、自然周（周一至周日）、自然月分别去重。账号注销生效时移除事件用户关联并将事件键改为匿名随机 ID，保留周期时间和匿名统计。每日聚合由管理后端执行，不能用账号 ACTIVE 状态代替行为活跃。
+
 ## Docker Compose
 
 先复制 `.env.example` 为 `.env` 并填写密钥，再执行：
@@ -94,3 +102,5 @@ $env:JUYA_TEST_REDIS_URL = "redis://..."
 未设置时，相应 MySQL/Redis 集成测试会明确标记为 skipped；单元、契约和不依赖外部服务的端到端测试仍会执行。
 
 云效的 verify 阶段会强制要求两个测试 URL，并要求目标 MySQL 已执行 admin-api schema 迁移；缺少真实基础设施或总覆盖率低于 80% 时流水线直接失败，不允许以 skipped 结果发布。
+
+V1.3 当前接口见 [接口文档](docs/api/v13-miniapp-api.md)、[实际 OpenAPI 快照](docs/contracts/miniapp-api.json) 与 [生成类型](docs/contracts/miniapp-api.d.ts)：56 个 OpenAPI 操作及 1 个隐藏 metrics。Ruff、格式、mypy 与隔离 MySQL/Redis 测试 102 passed/1 skipped 通过。真实跨服务场景、资源授权及暂停权益验证见 [交付记录](../juya-admin-api/docs/implementation/v13-content/evidence.md)；小程序前端及微信真机验收延期。

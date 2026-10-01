@@ -79,7 +79,12 @@ async def test_get_and_idempotent_command_retry_but_plain_post_does_not() -> Non
                 "sources": ["OPEN"],
                 "earliest_expires_at": None,
                 "activated_at": None,
-                "scene": {"public_id": "scene-1", "title": "Scene"},
+                "scene": {
+                    "scene_id": "scene-1",
+                    "revision_id": "rev-1",
+                    "content_version": 1,
+                    "content": {"title_en": "Scene"},
+                },
             },
         )
 

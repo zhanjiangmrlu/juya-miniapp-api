@@ -2,7 +2,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Header, Response
 
 from juya_miniapp_api.infrastructure.redis.rate_limit import RateLimiter, enforce_rate_limit
 from juya_miniapp_api.modules.contacts.service import ContactService
@@ -19,6 +19,13 @@ def create_contacts_router(
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/me/contact", tags=["contact"])
+
+    @router.post("/prompt-exposures")
+    async def prompt_exposure(
+        user_id: Annotated[str, Depends(user_dependency)],
+        idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
+    ) -> dict[str, bool]:
+        return {"created": await service.record_prompt_exposure(user_id, idempotency_key, clock())}
 
     @router.get("")
     async def get_contact(

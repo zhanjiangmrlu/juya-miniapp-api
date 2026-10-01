@@ -40,3 +40,21 @@ async def test_repeated_completion_creates_one_event_and_checkin() -> None:
     assert repeated.created is False
     assert len(repository.completion_events) == 1
     assert len(repository.checkins) == 1
+
+
+@pytest.mark.asyncio
+async def test_progress_and_complete_fail_closed_for_preview_and_unavailable_access() -> None:
+    from juya_miniapp_api.integrations.admin_api.schemas import AccessProjection
+    from juya_miniapp_api.shared.errors import AppError
+
+    class Catalog:
+        async def access(self, user_id, scene_ids):
+            return [AccessProjection(scene_id="scene-1", level="PREVIEW")]
+
+    repository = InMemoryLearningRepository()
+    service = LearningService(repository, Catalog())
+    with pytest.raises(AppError):
+        await service.save_progress(USER_ID, "scene-1", 1, ReadingPosition("entry"), NOW)
+    with pytest.raises(AppError):
+        await service.complete(USER_ID, "scene-1", "complete", NOW)
+    assert repository.progress == {}

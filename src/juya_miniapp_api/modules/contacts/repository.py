@@ -2,12 +2,14 @@ import asyncio
 import hmac
 from datetime import UTC, datetime
 from typing import Protocol, cast
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from juya_miniapp_api.infrastructure.analytics_events import append_event
 from juya_miniapp_api.modules.contacts.domain import (
     AdminCorrectionRecord,
     ContactAuditEvent,
@@ -34,6 +36,13 @@ _SAFE_CONTACT_EVENT_TYPES = frozenset(
 
 
 class ContactRepository(Protocol):
+    async def record_prompt_exposure(
+        self,
+        user_id: str,
+        idempotency_key: str,
+        now: datetime,
+    ) -> bool: ...
+
     async def get_contact(self, user_id: str) -> ContactRecord | None: ...
 
     async def get_contacts(self, user_ids: tuple[str, ...]) -> tuple[ContactRecord, ...]: ...
@@ -82,11 +91,26 @@ class ContactRepository(Protocol):
 class InMemoryContactRepository:
     def __init__(self) -> None:
         self.records: dict[str, ContactRecord] = {}
+        self.prompt_exposures: set[tuple[str, str]] = set()
         self.corrections: dict[str, CorrectionRequest] = {}
         self.admin_identities: dict[str, tuple[str, str | None]] = {}
         self.audit_events: list[ContactAuditEvent] = []
         self.decision_idempotency: dict[tuple[str, str], tuple[str, str]] = {}
         self._lock = asyncio.Lock()
+
+    async def record_prompt_exposure(
+        self,
+        user_id: str,
+        idempotency_key: str,
+        now: datetime,
+    ) -> bool:
+        del now
+        async with self._lock:
+            key = (user_id, idempotency_key)
+            if key in self.prompt_exposures:
+                return False
+            self.prompt_exposures.add(key)
+            return True
 
     async def get_contact(self, user_id: str) -> ContactRecord | None:
         return self.records.get(user_id)
@@ -371,6 +395,22 @@ class SQLAlchemyContactRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
+    async def record_prompt_exposure(
+        self,
+        user_id: str,
+        idempotency_key: str,
+        now: datetime,
+    ) -> bool:
+        async with self._session_factory() as session, session.begin():
+            internal_id = await self._lock_user(session, user_id)
+            return await append_event(
+                session,
+                event_key=f"contact-exposure:{internal_id}:{idempotency_key}",
+                event_type="CONTACT_PROMPT_EXPOSED",
+                user_id=internal_id,
+                occurred_at=now,
+            )
+
     async def get_contact(self, user_id: str) -> ContactRecord | None:
         async with self._session_factory() as session:
             return await self._load_contact(session, user_id)
@@ -558,6 +598,15 @@ class SQLAlchemyContactRepository:
                 user_id,
                 now,
                 "CONTACT_WITHDRAWN",
+                emit_analytics=record is not None and record.wechat_id_hmac is not None,
+                analytics_payload={
+                    "cohort_day": record.consented_at.astimezone(UTC)
+                    .astimezone(ZoneInfo("Asia/Shanghai"))
+                    .date()
+                    .isoformat()
+                }
+                if record is not None and record.consented_at
+                else None,
             )
             withdrawn = await self._load_contact(session, user_id)
             if withdrawn is None:
@@ -956,7 +1005,48 @@ class SQLAlchemyContactRepository:
         actor_id: str,
         now: datetime,
         note: str,
+        *,
+        emit_analytics: bool = True,
+        analytics_payload: dict[str, object] | None = None,
     ) -> None:
+        event_type = {
+            "CONTACT_CREATED": "CONTACT_SUBMITTED",
+            "CONTACT_CHANGED": "CONTACT_SUBMITTED",
+            "CONTACT_WITHDRAWN": "CONTACT_WITHDRAWN",
+            "CONTACT_STATUS_CHANGED": "CONTACT_STATUS_CHANGED",
+        }.get(note)
+        extra = dict(analytics_payload or {})
+        if event_type in {"CONTACT_SUBMITTED", "CONTACT_WITHDRAWN"}:
+            reference_type = (
+                "CONTACT_PROMPT_EXPOSED"
+                if event_type == "CONTACT_SUBMITTED"
+                else "CONTACT_SUBMITTED"
+            )
+            reference = await session.scalar(
+                text(
+                    "SELECT occurred_at FROM analytics_event WHERE user_id=:user "
+                    "AND event_type=:type ORDER BY occurred_at DESC,id DESC LIMIT 1"
+                ),
+                {"user": user_id, "type": reference_type},
+            )
+            if event_type == "CONTACT_SUBMITTED":
+                extra["prompted"] = reference is not None
+            if reference is not None:
+                extra["cohort_day"] = (
+                    reference.replace(tzinfo=UTC)
+                    .astimezone(ZoneInfo("Asia/Shanghai"))
+                    .date()
+                    .isoformat()
+                )
+        if event_type is not None and emit_analytics:
+            await append_event(
+                session,
+                event_key=f"contact:{new_ulid(now)}",
+                event_type=event_type,
+                user_id=user_id,
+                occurred_at=now,
+                payload={"status": status, **extra},
+            )
         await session.execute(
             text(
                 "INSERT INTO contact_status_history "

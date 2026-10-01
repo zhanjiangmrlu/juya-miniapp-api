@@ -35,6 +35,16 @@ class ContactService:
         self._repository = repository
         self._field_cipher = field_cipher
 
+    async def record_prompt_exposure(
+        self,
+        user_id: str,
+        idempotency_key: str,
+        now: datetime,
+    ) -> bool:
+        if not idempotency_key or len(idempotency_key) > 128:
+            raise AppError("IDEMPOTENCY_KEY_INVALID", "幂等键无效", 422)
+        return await self._repository.record_prompt_exposure(user_id, idempotency_key, now)
+
     async def get(self, user_id: str) -> ContactView | None:
         record = await self._repository.get_contact(user_id)
         return self._view(record) if record is not None else None

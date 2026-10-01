@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from juya_miniapp_api.infrastructure.analytics_events import append_activity_events, append_event
 from juya_miniapp_api.modules.checkins.service import beijing_learning_date
 from juya_miniapp_api.modules.learning.domain import (
     CompletionResult,
@@ -136,6 +137,8 @@ class SQLAlchemyLearningRepository:
         client_sequence: int,
         position: ReadingPosition,
         now: datetime,
+        *,
+        is_scene_open: bool = False,
     ) -> LearningProgress:
         async with self._session_factory() as session, session.begin():
             internal_id = await self._lock_user(session, user_id)
@@ -174,6 +177,27 @@ class SQLAlchemyLearningRepository:
                         "user_id": internal_id,
                         "scene_id": scene_id,
                     },
+                )
+            day = beijing_learning_date(now).isoformat()
+            await append_activity_events(session, internal_id, now)
+            if current is None:
+                await self._record_open_start(session, internal_id, scene_id, now)
+                await append_event(
+                    session,
+                    event_key=f"scene-start:{internal_id}:{scene_id}",
+                    event_type="SCENE_STARTED",
+                    user_id=internal_id,
+                    occurred_at=now,
+                    dimension=f"scene:{scene_id}",
+                )
+            elif is_scene_open and current.completed_at is not None:
+                await append_event(
+                    session,
+                    event_key=f"revisit:{internal_id}:{scene_id}:{day}",
+                    event_type="SCENE_REVISITED",
+                    user_id=internal_id,
+                    occurred_at=now,
+                    dimension=f"scene:{scene_id}",
                 )
             updated = await self._load_progress(session, user_id, scene_id)
             if updated is None:
@@ -220,6 +244,115 @@ class SQLAlchemyLearningRepository:
                     },
                 )
             if created:
+                if current is None:
+                    await self._record_open_start(session, internal_id, scene_id, now)
+                    await append_event(
+                        session,
+                        event_key=f"scene-start:{internal_id}:{scene_id}",
+                        event_type="SCENE_STARTED",
+                        user_id=internal_id,
+                        occurred_at=now,
+                        dimension=f"scene:{scene_id}",
+                    )
+                open_config = await session.scalar(text("SELECT MAX(id) FROM open_scene_config"))
+                is_open = await session.scalar(
+                    text(
+                        "SELECT COUNT(*) FROM open_scene_item i "
+                        "JOIN scene s ON s.id=i.scene_id "
+                        "WHERE i.config_id=:config AND s.public_id=:scene"
+                    ),
+                    {"config": open_config, "scene": scene_id},
+                )
+                if is_open:
+                    await append_event(
+                        session,
+                        event_key=f"open-complete:{internal_id}:{open_config}:{scene_id}",
+                        event_type="OPEN_SCENE_COMPLETED",
+                        user_id=internal_id,
+                        occurred_at=now,
+                        dimension=f"scene:{scene_id}",
+                    )
+                    await append_event(
+                        session,
+                        event_key=f"open-learner:{internal_id}:{open_config}",
+                        event_type="OPEN_LEARNER_STARTED",
+                        user_id=internal_id,
+                        occurred_at=now,
+                    )
+                    completed_open = await session.scalar(
+                        text(
+                            "SELECT COUNT(*) FROM open_scene_item i "
+                            "JOIN scene s ON s.id=i.scene_id "
+                            "JOIN learning_progress p ON p.scene_id=s.public_id "
+                            "AND p.user_id=:user "
+                            "WHERE i.config_id=:config AND p.completed_at IS NOT NULL"
+                        ),
+                        {"config": open_config, "user": internal_id},
+                    )
+                    if completed_open == 3:
+                        first_open = await session.scalar(
+                            text("SELECT occurred_at FROM analytics_event WHERE event_key=:key"),
+                            {"key": f"open-learner:{internal_id}:{open_config}"},
+                        )
+                        await append_event(
+                            session,
+                            event_key=f"open-all:{internal_id}:{open_config}",
+                            event_type="OPEN_ALL_COMPLETED",
+                            user_id=internal_id,
+                            occurred_at=now,
+                            payload={
+                                "cohort_day": beijing_learning_date(
+                                    first_open.replace(tzinfo=UTC) if first_open else now
+                                ).isoformat()
+                            },
+                        )
+                limited = (
+                    await session.execute(
+                        text(
+                            "SELECT le.public_id,le.granted_at,le.activated_at,le.expires_at,"
+                            "cv.duration_days, "
+                            "c.public_id AS campaign_id FROM limited_entitlement le "
+                            "JOIN limited_campaign_version cv ON cv.id=le.campaign_version_id "
+                            "JOIN limited_campaign c ON c.id=cv.campaign_id WHERE le.user_id=:user "
+                            "AND le.status='ACTIVE' AND le.expires_at>:now AND NOT EXISTS ("
+                            "SELECT 1 FROM limited_campaign_scene cs "
+                            "JOIN scene ss ON ss.id=cs.scene_id "
+                            "LEFT JOIN learning_progress lp ON lp.scene_id=ss.public_id "
+                            "AND lp.user_id=:user "
+                            "WHERE cs.campaign_version_id=cv.id AND (lp.completed_at IS NULL "
+                            "OR lp.completed_at>le.expires_at)) FOR UPDATE"
+                        ),
+                        {"user": internal_id, "now": _database_datetime(now)},
+                    )
+                ).all()
+                for entitlement in limited:
+                    await append_event(
+                        session,
+                        event_key=f"limited-completed:{entitlement.public_id}",
+                        event_type="LIMITED_COMPLETED",
+                        user_id=internal_id,
+                        occurred_at=now,
+                        dimension=f"campaign:{entitlement.campaign_id}",
+                        payload={
+                            "mode": entitlement.duration_days,
+                            "before_expiry": True,
+                            "cohort_day": beijing_learning_date(
+                                entitlement.granted_at.replace(tzinfo=UTC)
+                            ).isoformat(),
+                            "started_day": beijing_learning_date(
+                                entitlement.activated_at.replace(tzinfo=UTC)
+                            ).isoformat(),
+                        },
+                    )
+                await append_event(
+                    session,
+                    event_key=f"scene-complete:{internal_id}:{scene_id}",
+                    event_type="SCENE_COMPLETED",
+                    user_id=internal_id,
+                    occurred_at=now,
+                    dimension=f"scene:{scene_id}",
+                )
+                await append_activity_events(session, internal_id, now)
                 await session.execute(
                     text(
                         "INSERT INTO learning_completion_event "
@@ -270,6 +403,29 @@ class SQLAlchemyLearningRepository:
                 .all()
             )
         return [self._from_row(row) for row in rows]
+
+    @staticmethod
+    async def _record_open_start(
+        session: AsyncSession,
+        user_id: int,
+        scene_id: str,
+        now: datetime,
+    ) -> None:
+        config = await session.scalar(
+            text(
+                "SELECT i.config_id FROM open_scene_item i JOIN scene s ON s.id=i.scene_id "
+                "WHERE s.public_id=:scene AND i.config_id=(SELECT MAX(id) FROM open_scene_config)"
+            ),
+            {"scene": scene_id},
+        )
+        if config is not None:
+            await append_event(
+                session,
+                event_key=f"open-learner:{user_id}:{config}",
+                event_type="OPEN_LEARNER_STARTED",
+                user_id=user_id,
+                occurred_at=now,
+            )
 
     @staticmethod
     async def _lock_user(session: AsyncSession, public_id: str) -> int:

@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import UTC, datetime
 from typing import Protocol, cast
 
@@ -6,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from juya_miniapp_api.infrastructure.analytics_events import append_activity_events, append_event
 from juya_miniapp_api.modules.checkins.service import beijing_learning_date
 from juya_miniapp_api.modules.favorites.domain import (
     FavoriteEntry,
@@ -81,7 +83,9 @@ class InMemoryFavoriteRepository:
                     None,
                 )
             source_map = self.sources.setdefault(current.public_id, {})
-            source_map[(source.scene_id, source.source_locator)] = source
+            source_map.setdefault(
+                (source.scene_id, (source.revision_id or "") + ":" + source.source_locator), source
+            )
             updated = FavoriteEntry(
                 current.public_id,
                 current.user_id,
@@ -214,20 +218,33 @@ class SQLAlchemyFavoriteRepository:
                     },
                 )
                 favorite_id = await session.scalar(text("SELECT LAST_INSERT_ID()"))
+                await append_event(
+                    session,
+                    event_key=f"favorite:{public_id}",
+                    event_type="FAVORITE_CREATED",
+                    user_id=internal_user_id,
+                    occurred_at=now,
+                    dimension=f"scene:{source.scene_id}",
+                )
             if favorite_id is None:
                 raise RuntimeError("Favorite insert did not return an id")
             await session.execute(
                 text(
                     "INSERT INTO favorite_source "
-                    "(favorite_id, scene_id, sentence_snapshot, source_locator) "
-                    "VALUES (:favorite_id, :scene_id, :snapshot, :locator) "
-                    "ON DUPLICATE KEY UPDATE sentence_snapshot = VALUES(sentence_snapshot)"
+                    "(favorite_id, scene_id, sentence_snapshot, source_locator, revision_id, "
+                    "entry_version, entry_snapshot) "
+                    "VALUES (:favorite_id, :scene_id, :snapshot, :locator, :revision, :version, "
+                    ":entry_snapshot) ON DUPLICATE KEY UPDATE favorite_id = VALUES(favorite_id)"
                 ),
                 {
                     "favorite_id": favorite_id,
                     "scene_id": source.scene_id,
                     "snapshot": source.sentence_snapshot,
-                    "locator": source.source_locator,
+                    "locator": ((source.revision_id + "|") if source.revision_id else "")
+                    + source.source_locator,
+                    "revision": source.revision_id,
+                    "version": source.entry_version,
+                    "entry_snapshot": json.dumps(source.entry_snapshot),
                 },
             )
             favorite = await self._load_by_internal_id(session, int(favorite_id), user_id)
@@ -334,6 +351,14 @@ class SQLAlchemyFavoriteRepository:
                 raise AppError("REVIEW_NOT_FOUND", "复习不存在", 404)
             created = row["completed_at"] is None
             if created:
+                await append_event(
+                    session,
+                    event_key=f"review:{review_id}",
+                    event_type="REVIEW_COMPLETED",
+                    user_id=internal_user_id,
+                    occurred_at=now,
+                )
+                await append_activity_events(session, internal_user_id, now)
                 await session.execute(
                     text("UPDATE review_session SET completed_at = :now WHERE id = :review_id"),
                     {"now": _database_datetime(now), "review_id": review_id},
@@ -412,7 +437,8 @@ class SQLAlchemyFavoriteRepository:
             (
                 await session.execute(
                     text(
-                        "SELECT scene_id, sentence_snapshot, source_locator "
+                        "SELECT scene_id, sentence_snapshot, source_locator, revision_id, "
+                        "entry_version, entry_snapshot "
                         "FROM favorite_source WHERE favorite_id = :favorite_id ORDER BY id"
                     ),
                     {"favorite_id": internal_id},
@@ -433,7 +459,17 @@ class SQLAlchemyFavoriteRepository:
             favorited_at,
             _utc_datetime(row["last_reviewed_at"]),
             tuple(
-                FavoriteSource(item["scene_id"], item["sentence_snapshot"], item["source_locator"])
+                FavoriteSource(
+                    item["scene_id"],
+                    item["sentence_snapshot"],
+                    item["source_locator"].split("|", 1)[-1],
+                    None,
+                    item["revision_id"],
+                    item["entry_version"],
+                    json.loads(item["entry_snapshot"])
+                    if isinstance(item["entry_snapshot"], str)
+                    else (item["entry_snapshot"] or {}),
+                )
                 for item in source_rows
             ),
         )

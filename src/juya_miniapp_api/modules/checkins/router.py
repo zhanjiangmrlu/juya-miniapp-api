@@ -69,7 +69,7 @@ def create_checkins_router(
                 accessible = {
                     item.scene_id
                     for item in projections
-                    if item.level not in {"NONE", "NO_ACCESS", "DENIED", "EXPIRED"}
+                    if item.level in {"OPEN", "FORMAL", "LIMITED"}
                 }
             unfinished = [
                 TodayTask("CONTINUE_SCENE", item.scene_id)
@@ -89,10 +89,15 @@ def create_checkins_router(
             ]
             review_cards: list[TodayTask] = []
             if favorites is not None:
-                review_cards = [
-                    TodayTask("FAVORITE_CARD", item.public_id)
-                    for item in await favorites.list_favorites(user_id, limit=10)
-                ]
+                cursor = None
+                while True:
+                    batch = await favorites.list_favorites(user_id, after_id=cursor, limit=100)
+                    review_cards.extend(
+                        TodayTask("FAVORITE_CARD", item.public_id) for item in batch
+                    )
+                    if len(batch) < 100:
+                        break
+                    cursor = batch[-1].public_id
             today_task = select_today_task(unfinished, new_scenes, review_cards, completed)
         task_payload = None
         if today_task is not None:
@@ -100,6 +105,9 @@ def create_checkins_router(
                 "kind": today_task.kind,
                 "target_id": today_task.target_id,
                 "card_ids": list(today_task.card_ids),
+                "review_queue_url": "/api/v1/reviews/queue"
+                if today_task.kind == "FAVORITE_REVIEW"
+                else None,
             }
         return {
             "greeting": _greeting(clock()),

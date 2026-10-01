@@ -64,6 +64,13 @@ async def test_deletion_revoke_and_execute_are_mutually_exclusive() -> None:
                     {"request_id": request_id},
                 )
             await session.execute(
+                text(
+                    "DELETE d FROM account_deletion_request d "
+                    "JOIN user_account u ON u.id=d.user_id WHERE u.public_id=:public_id"
+                ),
+                {"public_id": public_id},
+            )
+            await session.execute(
                 text("DELETE FROM user_account WHERE public_id = :public_id"),
                 {"public_id": public_id},
             )

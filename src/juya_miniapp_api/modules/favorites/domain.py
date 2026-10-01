@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -8,6 +9,9 @@ class FavoriteSource:
     sentence_snapshot: str
     source_locator: str
     original_link: str | None = None
+    revision_id: str | None = None
+    entry_version: int = 1
+    entry_snapshot: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

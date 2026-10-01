@@ -1,4 +1,6 @@
 import base64
+import json
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -37,6 +39,21 @@ def test_oss_upload_openapi_describes_v4_fields() -> None:
     credential = schema["components"]["schemas"][reference.rsplit("/", 1)[-1]]
     assert credential["properties"]["fields"]["additionalProperties"]["type"] == "string"
     assert "fields" in credential["required"]
+
+
+def test_openapi_snapshot_exposes_typed_published_scene_and_versioned_resources() -> None:
+    schema = create_app(runtime_settings()).openapi()
+    snapshot = Path(__file__).parents[2] / "docs/contracts/miniapp-api.json"
+    assert json.loads(snapshot.read_text(encoding="utf-8")) == schema
+    paths = schema["paths"]
+    for path, method, model in (
+        ("/api/v1/scenes/{scene_id}/open", "post", "SceneOpenResult"),
+        ("/api/v1/scenes/{scene_id}/entries/{entry_id}", "get", "SceneEntry"),
+        ("/api/v1/scenes/{scene_id}/resources/{resource_id}/signed-url", "get", "SignedResource"),
+    ):
+        response = paths[path][method]["responses"]["200"]["content"]["application/json"]["schema"]
+        reference = response["$ref"].rsplit("/", 1)[-1]
+        assert schema["components"]["schemas"][reference]["title"] == model
 
 
 @pytest.mark.asyncio

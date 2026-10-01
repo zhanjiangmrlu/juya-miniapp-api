@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+from pydantic import BaseModel, ValidationError
 
 from juya_miniapp_api.infrastructure.observability.metrics import ADMIN_API_LATENCY
 from juya_miniapp_api.infrastructure.observability.request_id import get_traceparent
@@ -18,8 +19,16 @@ from juya_miniapp_api.integrations.admin_api.schemas import (
     SceneEntry,
     SceneOpenResult,
     SignedMedia,
+    SignedResource,
 )
 from juya_miniapp_api.shared.errors import AppError
+
+
+def _validate[ModelType: BaseModel](model: type[ModelType], payload: object) -> ModelType:
+    try:
+        return model.model_validate(payload)
+    except ValidationError as error:
+        raise AdminApiUnavailable() from error
 
 
 class AdminApiUnavailable(AppError):
@@ -48,7 +57,7 @@ class AdminApiClient:
 
     async def get_modules(self) -> list[LearningModule]:
         payload = await self._request_json("GET", "/internal/v1/learning/modules")
-        return [LearningModule.model_validate(item) for item in payload.get("items", [])]
+        return [_validate(LearningModule, item) for item in payload.get("items", [])]
 
     async def get_catalog(self, user_id: str, summary: Mapping[str, object]) -> LearningCatalog:
         del summary
@@ -63,7 +72,7 @@ class AdminApiClient:
             "/internal/v1/access/batch",
             {"user_id": user_id, "scene_ids": list(scene_ids)},
         )
-        return [AccessProjection.model_validate(item) for item in payload.get("items", [])]
+        return [_validate(AccessProjection, item) for item in payload.get("items", [])]
 
     async def open_scene(
         self, user_id: str, scene_id: str, idempotency_key: str
@@ -74,15 +83,28 @@ class AdminApiClient:
             {"user_id": user_id},
             idempotency_key=idempotency_key,
         )
-        return SceneOpenResult.model_validate(payload)
+        return _validate(SceneOpenResult, payload)
 
-    async def get_entry(self, user_id: str, scene_id: str, entry_id: str) -> SceneEntry:
+    async def get_entry(
+        self,
+        user_id: str,
+        scene_id: str,
+        entry_id: str,
+        revision_id: str,
+        entry_version: int,
+        source_locator: str,
+    ) -> SceneEntry:
         payload = await self._request_json(
             "POST",
             f"/internal/v1/scenes/{scene_id}/entries/{entry_id}",
-            {"user_id": user_id},
+            {
+                "user_id": user_id,
+                "revision_id": revision_id,
+                "entry_version": entry_version,
+                "source_locator": source_locator,
+            },
         )
-        return SceneEntry.model_validate(payload)
+        return _validate(SceneEntry, payload)
 
     async def get_signed_media(self, user_id: str, target_id: str) -> SignedMedia:
         payload = await self._request_json(
@@ -90,13 +112,27 @@ class AdminApiClient:
             f"/internal/v1/media/{target_id}/signed-url",
             {"user_id": user_id},
         )
-        return SignedMedia.model_validate(payload)
+        return _validate(SignedMedia, payload)
+
+    async def get_signed_resource(
+        self,
+        user_id: str,
+        scene_id: str,
+        resource_id: str,
+        revision_id: str,
+    ) -> SignedResource:
+        payload = await self._request_json(
+            "POST",
+            f"/internal/v1/scenes/{scene_id}/resources/{resource_id}/signed-url",
+            {"user_id": user_id, "revision_id": revision_id},
+        )
+        return _validate(SignedResource, payload)
 
     async def get_entitlements(self, user_id: str) -> EntitlementProjection:
         payload = await self._request_json(
             "POST", "/internal/v1/entitlements", {"user_id": user_id}
         )
-        return EntitlementProjection.model_validate(payload)
+        return _validate(EntitlementProjection, payload)
 
     async def create_feedback(
         self,
@@ -237,7 +273,10 @@ class AdminApiClient:
             ).observe(time.perf_counter() - started_at)
             if response.status_code >= 400:
                 self._raise_upstream_error(response)
-            value = response.json()
+            try:
+                value = response.json()
+            except ValueError as error:
+                raise AdminApiUnavailable() from error
             return value if isinstance(value, dict) else {"items": value}
         raise AdminApiUnavailable()
 

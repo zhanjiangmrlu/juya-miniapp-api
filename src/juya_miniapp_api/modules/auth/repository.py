@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from juya_miniapp_api.infrastructure.analytics_events import append_event
 from juya_miniapp_api.modules.auth.domain import SessionRecord
 from juya_miniapp_api.modules.users.models import UserSummary
 from juya_miniapp_api.shared.errors import AppError
@@ -167,6 +168,13 @@ class SQLAlchemyAuthRepository:
                 user_id = await session.scalar(text("SELECT LAST_INSERT_ID()"))
                 if user_id is None:
                     raise RuntimeError("MySQL did not return the inserted user id")
+                await append_event(
+                    session,
+                    event_key=f"user-created:{user_id}",
+                    event_type="USER_CREATED",
+                    user_id=int(user_id),
+                    occurred_at=now,
+                )
                 await session.execute(
                     text("INSERT INTO user_profile (user_id, source) VALUES (:user_id, 'WECHAT')"),
                     {"user_id": user_id},

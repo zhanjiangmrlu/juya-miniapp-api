@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from juya_miniapp_api.infrastructure.analytics_events import append_event
 from juya_miniapp_api.modules.accounts.domain import (
     DeletionRequest,
     DeletionStatus,
@@ -220,6 +221,13 @@ class SQLAlchemyAccountRepository:
                 text("UPDATE user_account SET status = 'DELETION_PENDING' WHERE id = :user_id"),
                 {"user_id": internal_id},
             )
+            await append_event(
+                session,
+                event_key=f"deletion-request:{request_id}",
+                event_type="DELETION_REQUESTED",
+                user_id=internal_id,
+                occurred_at=requested_at,
+            )
             return DeletionRequest(request_id, user_id, requested_at, effective_at, "PENDING")
 
     async def revoke_deletion(self, user_id: str, now: datetime) -> DeletionRequest:
@@ -242,6 +250,13 @@ class SQLAlchemyAccountRepository:
                 {"user_id": internal_id},
             )
             request = self._from_row(row, user_id)
+            await append_event(
+                session,
+                event_key=f"deletion-withdrawn:{request.id}",
+                event_type="DELETION_WITHDRAWN",
+                user_id=internal_id,
+                occurred_at=now,
+            )
             request.status = "REVOKED"
             request.revoked_at = now
             return request
@@ -394,6 +409,20 @@ class SQLAlchemyAccountRepository:
             )
             await session.execute(
                 text("UPDATE user_account SET status = 'DELETED' WHERE id = :user_id"),
+                {"user_id": internal_id},
+            )
+            await append_event(
+                session,
+                event_key=f"deletion-effective:{request_id}",
+                event_type="DELETION_EFFECTIVE",
+                user_id=internal_id,
+                occurred_at=now,
+            )
+            await session.execute(
+                text(
+                    "UPDATE analytics_event SET user_id=NULL, event_key=CONCAT('anonymous:',id) "
+                    "WHERE user_id=:user_id"
+                ),
                 {"user_id": internal_id},
             )
             request.status = "DELETED"
