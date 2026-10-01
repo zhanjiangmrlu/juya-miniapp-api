@@ -1180,7 +1180,7 @@ GET /internal/metrics
 
 ## 21. V1.3 当前接口契约（2026-10-01）
 
-本节及当前 OpenAPI 优先于前文历史示例，不维护旧内容格式。共有56个OpenAPI操作（42 public、12 internal、2 health）和1个不进入OpenAPI的指标接口，合计57个HTTP操作。仓库 docs/contracts/miniapp-api.json 为实际运行服务导出；miniapp-api.d.ts为可供后续小程序接入的生成类型，本次小程序前端没有修改。
+本节及当前 OpenAPI 优先于前文历史示例，不维护旧内容格式。共有57个OpenAPI操作（43 public、12 internal、2 health）和1个不进入OpenAPI的指标接口，合计58个HTTP操作。仓库 docs/contracts/miniapp-api.json 为实际运行服务导出；miniapp-api.d.ts为可供后续小程序接入的生成类型，本次小程序前端没有修改。
 
 POST /api/v1/scenes/{scene_id}/open 返回 SceneOpenResult；完整权限时scene为PublishedScene（scene_id/revision_id/content_version/content），content是严格结构化四模块正文。PREVIEW时scene只能为PreviewScene（public_id、title、title_en、title_zh、series、cover_url、introduction、preview_status），不能带完整原图、正文、词条释义、音频或时间点，不写入用户学习历史。
 
