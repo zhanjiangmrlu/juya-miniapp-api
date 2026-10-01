@@ -64,6 +64,26 @@ $env:JUYA_ENABLE_BEAT = "true"
 
 当前 schema 由相邻 `juya-admin-api/migrations` 管理。启动前先执行该项目的 Alembic 迁移；`/health/ready` 会拒绝低于最低版本的 schema。admin-api 需要提供学习目录、访问投影、场景 open、正文/媒体、权益、反馈和账号删除接口。注销使用 transactional outbox 和唯一事件 ID，admin-api 完成后回调 `/internal/v1/users/{user_id}/deletion-cleanup-result`。
 
+注销 Worker 调用管理服务 `POST /internal/v1/account-deletions`，携带 `user_id`、
+`deletion_request_id` 和唯一 `event_id`。管理服务清理和结果 outbox 写入同一事务，
+通过带 HMAC 的清理结果回调通知本服务；暂时失败按退避重试，不以一次 HTTP 提交代替闭环。
+
+2026-10-01 的本地联调使用独立 `juya_v13_local_e2e` 数据库、Redis `6398/0`、
+管理 API `18000` 和用户 API `18001`。已有两个隔离 API 容器时，可以从工作区根目录执行：
+
+```powershell
+# 默认只检查环境、数据库、内部地址与 HMAC 是否匹配
+& juya-miniapp-api\.venv\Scripts\python.exe juya-miniapp-api\scripts\local-stack-worker.py --role mini-worker
+# 确认该隔离环境后启动；同名容器已存在则拒绝替换
+& juya-miniapp-api\.venv\Scripts\python.exe juya-miniapp-api\scripts\local-stack-worker.py --role mini-worker --start
+& juya-miniapp-api\.venv\Scripts\python.exe juya-miniapp-api\scripts\local-stack-worker.py --role admin-domain --start
+& juya-miniapp-api\.venv\Scripts\python.exe juya-miniapp-api\scripts\local-stack-worker.py --role admin-beat --start
+```
+
+该工具继承已运行隔离容器的镜像和环境，只启动指定 Worker/Beat，不初始化数据库、改写 `.env`
+或切换主站环境。开发用 mini Worker 以 `JUYA_PROCESS_TYPE=worker` 和 `JUYA_ENABLE_BEAT=true`
+启动。生产环境仍需按部署文档管理独立且唯一的 Beat 实例。
+
 V1.3 最低 schema 为 `0015`。完整场景返回 `scene_id/revision_id/content_version/content`，其中 `content` 使用严格的共享正文类型；预览仅返回标题、系列、封面、简介等白名单元数据，不写入学习历史。词卡查询及收藏请求须携带 `revision_id/entry_version/source_locator`；收藏使用管理后端授权返回的词卡和句子快照，保留不同修订的历史来源。独立词卡发音可以为空。
 
 场景资源使用 `GET /api/v1/scenes/{scene_id}/resources/{resource_id}/signed-url?revision_id=...` 获取短期授权 URL。服务携带用户和修订信息通过 HMAC 委托管理后端校验引用关系；上游不可用、响应类型不符或 URL 已到期时拒绝访问。资源响应禁止缓存。
