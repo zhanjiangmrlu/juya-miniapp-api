@@ -1,9 +1,10 @@
 import asyncio
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -37,7 +38,7 @@ class FavoriteRepository(Protocol):
     async def create_review(
         self,
         user_id: str,
-        card_count: int,
+        card_ids: tuple[str, ...],
         idempotency_key: str,
         now: datetime,
     ) -> ReviewSession: ...
@@ -123,16 +124,31 @@ class InMemoryFavoriteRepository:
     async def create_review(
         self,
         user_id: str,
-        card_count: int,
+        card_ids: tuple[str, ...],
         idempotency_key: str,
         now: datetime,
     ) -> ReviewSession:
         async with self._lock:
             existing_id = self.review_idempotency.get((user_id, idempotency_key))
             if existing_id is not None:
-                return self.reviews[existing_id]
+                existing = self.reviews[existing_id]
+                if existing.card_ids != card_ids:
+                    raise AppError("IDEMPOTENCY_KEY_CONFLICT", "幂等键已用于不同卡片集合", 409)
+                return existing
+            if not card_ids or len(set(card_ids)) != len(card_ids):
+                raise AppError("REVIEW_CARDS_INVALID", "复习卡片无效", 422)
+            for card in card_ids:
+                if await self.get(user_id, card) is None:
+                    raise AppError("REVIEW_CARDS_INVALID", "复习卡片不存在或不属于本人", 422)
             review = ReviewSession(
-                new_ulid(now), user_id, "FAVORITES", now, None, card_count, idempotency_key
+                new_ulid(now),
+                user_id,
+                "FAVORITES",
+                now,
+                None,
+                len(card_ids),
+                idempotency_key,
+                card_ids,
             )
             self.reviews[review.id] = review
             self.review_idempotency[(user_id, idempotency_key)] = review.id
@@ -152,10 +168,21 @@ class InMemoryFavoriteRepository:
                 raise AppError("REVIEW_NOT_FOUND", "复习不存在", 404)
             created = review.completed_at is None
             if created:
+                if not review.card_ids or len(review.card_ids) != review.card_count:
+                    raise AppError("REVIEW_CARDS_INVALID", "复习卡片集合无效", 409)
+                cards = [await self.get(user_id, card) for card in review.card_ids]
+                if any(card is None for card in cards):
+                    raise AppError("REVIEW_CARDS_INVALID", "复习卡片已删除", 409)
+                for key, favorite in self.favorites.items():
+                    if favorite.user_id == user_id and favorite.public_id in review.card_ids:
+                        self.favorites[key] = replace(
+                            favorite, last_reviewed_at=max(favorite.last_reviewed_at or now, now)
+                        )
                 review.completed_at = now
-            learning_day = beijing_learning_date(now)
-            self.checkins.add((user_id, learning_day))
-            return ReviewCompletion(review, created, learning_day)
+                self.checkins.add((user_id, beijing_learning_date(now)))
+            return ReviewCompletion(
+                review, created, beijing_learning_date(review.completed_at or now)
+            )
 
 
 def _database_datetime(value: datetime) -> datetime:
@@ -281,7 +308,7 @@ class SQLAlchemyFavoriteRepository:
     async def create_review(
         self,
         user_id: str,
-        card_count: int,
+        card_ids: tuple[str, ...],
         idempotency_key: str,
         now: datetime,
     ) -> ReviewSession:
@@ -292,7 +319,8 @@ class SQLAlchemyFavoriteRepository:
                     await session.execute(
                         text(
                             "SELECT id, review_type, started_at, completed_at, card_count, "
-                            "idempotency_key FROM review_session WHERE user_id = :user_id "
+                            "idempotency_key, card_ids FROM review_session WHERE user_id = "
+                            ":user_id "
                             "AND idempotency_key = :idempotency_key FOR UPDATE"
                         ),
                         {"user_id": internal_user_id, "idempotency_key": idempotency_key},
@@ -302,24 +330,30 @@ class SQLAlchemyFavoriteRepository:
                 .first()
             )
             if row is not None:
-                return self._review_from_row(row, user_id)
+                review = self._review_from_row(row, user_id)
+                if review.card_ids != card_ids:
+                    raise AppError("IDEMPOTENCY_KEY_CONFLICT", "幂等键已用于不同卡片集合", 409)
+                return review
+            await self._validate_cards(session, internal_user_id, card_ids)
             review_id = new_ulid(now)
             await session.execute(
                 text(
                     "INSERT INTO review_session "
-                    "(id, user_id, review_type, started_at, card_count, idempotency_key) "
-                    "VALUES (:id, :user_id, 'FAVORITES', :now, :card_count, :idempotency_key)"
+                    "(id, user_id, review_type, started_at, card_count, idempotency_key, card_ids) "
+                    "VALUES (:id, :user_id, 'FAVORITES', :now, :card_count, :idempotency_key, "
+                    ":cards)"
                 ),
                 {
                     "id": review_id,
                     "user_id": internal_user_id,
                     "now": _database_datetime(now),
-                    "card_count": card_count,
+                    "card_count": len(card_ids),
+                    "cards": json.dumps(card_ids),
                     "idempotency_key": idempotency_key,
                 },
             )
             return ReviewSession(
-                review_id, user_id, "FAVORITES", now, None, card_count, idempotency_key
+                review_id, user_id, "FAVORITES", now, None, len(card_ids), idempotency_key, card_ids
             )
 
     async def complete_review(
@@ -338,7 +372,7 @@ class SQLAlchemyFavoriteRepository:
                     await session.execute(
                         text(
                             "SELECT id, review_type, started_at, completed_at, card_count, "
-                            "idempotency_key FROM review_session WHERE id = :review_id "
+                            "idempotency_key, card_ids FROM review_session WHERE id = :review_id "
                             "AND user_id = :user_id FOR UPDATE"
                         ),
                         {"review_id": review_id, "user_id": internal_user_id},
@@ -351,6 +385,23 @@ class SQLAlchemyFavoriteRepository:
                 raise AppError("REVIEW_NOT_FOUND", "复习不存在", 404)
             created = row["completed_at"] is None
             if created:
+                review = self._review_from_row(row, user_id)
+                if len(review.card_ids) != review.card_count:
+                    raise AppError("REVIEW_CARDS_INVALID", "复习卡片集合无效", 409)
+                await self._validate_cards(session, internal_user_id, review.card_ids)
+                await session.execute(
+                    text(
+                        "UPDATE favorite_entry SET "
+                        "last_reviewed_at=GREATEST(COALESCE(last_reviewed_at,:now),:now) WHERE "
+                        "user_id=:user "
+                        "AND public_id IN :cards"
+                    ).bindparams(bindparam("cards", expanding=True)),
+                    {
+                        "now": _database_datetime(now),
+                        "user": internal_user_id,
+                        "cards": review.card_ids,
+                    },
+                )
                 await append_event(
                     session,
                     event_key=f"review:{review_id}",
@@ -374,7 +425,9 @@ class SQLAlchemyFavoriteRepository:
             review = self._review_from_row(row, user_id)
             if created:
                 review.completed_at = now
-            return ReviewCompletion(review, created, learning_day)
+            return ReviewCompletion(
+                review, created, beijing_learning_date(review.completed_at or now)
+            )
 
     async def list_favorites(
         self, user_id: str, *, after_id: str | None = None, limit: int = 50
@@ -403,6 +456,26 @@ class SQLAlchemyFavoriteRepository:
                 if favorite is not None:
                     favorites.append(favorite)
             return favorites
+
+    @staticmethod
+    async def _validate_cards(session: AsyncSession, user_id: int, cards: tuple[str, ...]) -> None:
+        if not cards or len(set(cards)) != len(cards):
+            raise AppError("REVIEW_CARDS_INVALID", "复习卡片集合无效", 422)
+        rows: Any = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT public_id FROM favorite_entry WHERE user_id=:user AND "
+                        "public_id IN :cards FOR UPDATE"
+                    ).bindparams(bindparam("cards", expanding=True)),
+                    {"user": user_id, "cards": cards},
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if set(rows) != set(cards):
+            raise AppError("REVIEW_CARDS_INVALID", "复习卡片不存在或不属于本人", 422)
 
     @staticmethod
     async def _lock_user(session: AsyncSession, public_id: str) -> int:
@@ -487,4 +560,9 @@ class SQLAlchemyFavoriteRepository:
             _utc_datetime(row["completed_at"]),
             row["card_count"],
             row["idempotency_key"],
+            tuple(
+                json.loads(row["card_ids"])
+                if isinstance(row["card_ids"], str)
+                else row["card_ids"] or ()
+            ),
         )

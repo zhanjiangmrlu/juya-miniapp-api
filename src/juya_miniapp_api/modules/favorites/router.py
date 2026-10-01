@@ -149,6 +149,7 @@ def create_favorites_router(
         return {
             "id": review.id,
             "card_count": review.card_count,
+            "card_ids": review.card_ids,
             "started_at": review.started_at,
         }
 

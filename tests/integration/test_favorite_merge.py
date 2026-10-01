@@ -59,7 +59,9 @@ async def test_concurrent_favorite_merges_sources_and_review_completion_is_idemp
         )
         assert len({item.public_id for item in favorites}) == 1
 
-        review = await service.create_review(public_id, list(range(500)), "review-create-1", NOW)
+        review = await service.create_review(
+            public_id, [favorites[0].public_id], "review-create-1", NOW
+        )
         completions = await asyncio.gather(
             *(
                 service.complete_review(public_id, review.id, f"done-{index}", NOW)
@@ -100,7 +102,13 @@ async def test_concurrent_favorite_merges_sources_and_review_completion_is_idemp
 
         await service.delete(public_id, favorites[0].public_id)
         async with factory() as session:
-            remaining_sources = await session.scalar(text("SELECT COUNT(*) FROM favorite_source"))
+            remaining_sources = await session.scalar(
+                text(
+                    "SELECT COUNT(*) FROM favorite_source s JOIN favorite_entry f "
+                    "ON f.id=s.favorite_id WHERE f.user_id=:user"
+                ),
+                {"user": user_id},
+            )
         assert remaining_sources == 0
     finally:
         async with factory() as session, session.begin():

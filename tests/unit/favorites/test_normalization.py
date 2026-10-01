@@ -72,10 +72,27 @@ async def test_delete_cascades_sources_and_review_has_no_card_limit() -> None:
         "sentence-1",
         NOW,
     )
-    review = await service.create_review(USER_ID, list(range(500)), "review-1", NOW)
+    cards = [
+        await service.favorite(
+            USER_ID,
+            "VOCABULARY",
+            f"word {index}",
+            f"entry-{index}",
+            "scene-1",
+            "sentence",
+            "sentence-1",
+            NOW,
+        )
+        for index in range(500)
+    ]
+    review = await service.create_review(
+        USER_ID, [card.public_id for card in cards], "review-1", NOW
+    )
     first = await service.complete_review(USER_ID, review.id, "done-1", NOW)
     repeated = await service.complete_review(USER_ID, review.id, "done-2", NOW)
     await service.delete(USER_ID, favorite.public_id)
+    for card in cards:
+        await service.delete(USER_ID, card.public_id)
 
     assert review.card_count == 500
     assert first.created is True

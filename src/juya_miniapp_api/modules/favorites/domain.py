@@ -35,6 +35,7 @@ class ReviewSession:
     completed_at: datetime | None
     card_count: int
     idempotency_key: str
+    card_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

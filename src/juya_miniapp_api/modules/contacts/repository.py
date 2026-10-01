@@ -1,7 +1,9 @@
 import asyncio
 import hmac
+import json
 from datetime import UTC, datetime
 from typing import Protocol, cast
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
@@ -9,7 +11,6 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from juya_miniapp_api.infrastructure.analytics_events import append_event
 from juya_miniapp_api.modules.contacts.domain import (
     AdminCorrectionRecord,
     ContactAuditEvent,
@@ -17,6 +18,7 @@ from juya_miniapp_api.modules.contacts.domain import (
     ContactTimelineEvent,
     CorrectionRequest,
 )
+from juya_miniapp_api.modules.contacts.events import append_contact_event
 from juya_miniapp_api.shared.errors import AppError
 from juya_miniapp_api.shared.ids import new_ulid
 
@@ -403,8 +405,9 @@ class SQLAlchemyContactRepository:
     ) -> bool:
         async with self._session_factory() as session, session.begin():
             internal_id = await self._lock_user(session, user_id)
-            return await append_event(
+            return await append_contact_event(
                 session,
+                payload={"contact_cohort": uuid4().hex},
                 event_key=f"contact-exposure:{internal_id}:{idempotency_key}",
                 event_type="CONTACT_PROMPT_EXPOSED",
                 user_id=internal_id,
@@ -1011,24 +1014,47 @@ class SQLAlchemyContactRepository:
     ) -> None:
         event_type = {
             "CONTACT_CREATED": "CONTACT_SUBMITTED",
-            "CONTACT_CHANGED": "CONTACT_SUBMITTED",
+            "CONTACT_CHANGED": "CONTACT_CHANGED",
             "CONTACT_WITHDRAWN": "CONTACT_WITHDRAWN",
             "CONTACT_STATUS_CHANGED": "CONTACT_STATUS_CHANGED",
         }.get(note)
         extra = dict(analytics_payload or {})
+        if note == "CONTACT_CHANGED":
+            previous = await session.scalar(
+                text(
+                    "SELECT 1 FROM contact_status_history WHERE user_id=:user AND note IN "
+                    "('CONTACT_CREATED','CONTACT_CHANGED') LIMIT 1"
+                ),
+                {"user": user_id},
+            )
+            if previous is None:
+                event_type = "CONTACT_SUBMITTED"
+                note = "CONTACT_CREATED"
         if event_type in {"CONTACT_SUBMITTED", "CONTACT_WITHDRAWN"}:
             reference_type = (
                 "CONTACT_PROMPT_EXPOSED"
                 if event_type == "CONTACT_SUBMITTED"
                 else "CONTACT_SUBMITTED"
             )
-            reference = await session.scalar(
-                text(
-                    "SELECT occurred_at FROM analytics_event WHERE user_id=:user "
-                    "AND event_type=:type ORDER BY occurred_at DESC,id DESC LIMIT 1"
-                ),
-                {"user": user_id, "type": reference_type},
-            )
+            reference_row = (
+                await session.execute(
+                    text(
+                        "SELECT occurred_at,payload FROM analytics_event WHERE user_id=:user "
+                        "AND event_type=:type ORDER BY occurred_at DESC,id DESC LIMIT 1"
+                    ),
+                    {"user": user_id, "type": reference_type},
+                )
+            ).first()
+            reference = reference_row.occurred_at if reference_row is not None else None
+            if reference_row is not None:
+                reference_payload = (
+                    json.loads(reference_row.payload)
+                    if isinstance(reference_row.payload, str)
+                    else reference_row.payload or {}
+                )
+                cohort = reference_payload.get("contact_cohort")
+                if cohort:
+                    extra["contact_cohort"] = cohort
             if event_type == "CONTACT_SUBMITTED":
                 extra["prompted"] = reference is not None
             if reference is not None:
@@ -1039,9 +1065,11 @@ class SQLAlchemyContactRepository:
                     .isoformat()
                 )
         if event_type is not None and emit_analytics:
-            await append_event(
+            await append_contact_event(
                 session,
-                event_key=f"contact:{new_ulid(now)}",
+                event_key=f"contact-first:{user_id}"
+                if event_type == "CONTACT_SUBMITTED"
+                else f"contact:{new_ulid(now)}",
                 event_type=event_type,
                 user_id=user_id,
                 occurred_at=now,

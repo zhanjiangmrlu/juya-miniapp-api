@@ -126,7 +126,14 @@ class FavoriteService:
     ) -> ReviewSession:
         if not idempotency_key or len(idempotency_key) > 128:
             raise AppError("IDEMPOTENCY_KEY_INVALID", "幂等键无效", 422)
-        return await self._repository.create_review(user_id, len(card_ids), idempotency_key, now)
+        if not card_ids or any(
+            not isinstance(card, str) or not card or len(card) > 26 for card in card_ids
+        ):
+            raise AppError("REVIEW_CARDS_INVALID", "复习须选择有效收藏卡片", 422)
+        cards = tuple(str(card) for card in card_ids)
+        if len(set(cards)) != len(cards):
+            raise AppError("REVIEW_CARDS_INVALID", "复习卡片不能重复", 422)
+        return await self._repository.create_review(user_id, cards, idempotency_key, now)
 
     async def complete_review(
         self,
@@ -135,6 +142,6 @@ class FavoriteService:
         idempotency_key: str,
         now: datetime,
     ) -> ReviewCompletion:
-        if not idempotency_key:
+        if not idempotency_key or len(idempotency_key) > 128:
             raise AppError("IDEMPOTENCY_KEY_INVALID", "幂等键无效", 422)
         return await self._repository.complete_review(user_id, review_id, idempotency_key, now)
