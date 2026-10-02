@@ -22,6 +22,7 @@ class FeedbackCreateRequest(BaseModel):
 class SupplementRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str = Field(min_length=1, max_length=300)
+    screenshots: list[str] = Field(default_factory=list, max_length=1)
 
 
 class ResolutionRequest(BaseModel):
@@ -111,7 +112,9 @@ def create_feedback_router(
         user_id: Annotated[str, Depends(user_dependency)],
         idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
     ) -> dict[str, Any]:
-        return await service.supplement(user_id, feedback_id, payload.text, idempotency_key)
+        return await service.supplement(
+            user_id, feedback_id, payload.text, idempotency_key, screenshots=payload.screenshots
+        )
 
     @router.post("/{feedback_id}/resolution")
     async def resolution(

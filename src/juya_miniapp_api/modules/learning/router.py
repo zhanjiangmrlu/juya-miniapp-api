@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -41,6 +41,7 @@ def create_learning_router(
     *,
     user_dependency: UserDependency,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    achievement_reader: Callable[[str], Awaitable[dict[str, int]]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["learning"])
 
@@ -85,7 +86,12 @@ def create_learning_router(
         user_id: Annotated[str, Depends(user_dependency)],
     ) -> dict[str, object] | None:
         progress = await repository.get_progress(user_id, scene_id)
-        return _progress(progress) if progress is not None else None
+        if progress is None:
+            return None
+        payload = _progress(progress)
+        if achievement_reader is not None:
+            payload.update(await achievement_reader(user_id))
+        return payload
 
     @router.get("/history/scenes")
     async def history(

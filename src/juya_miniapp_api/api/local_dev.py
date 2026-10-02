@@ -3,10 +3,14 @@
 import io
 import wave
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import FileResponse
+
+from juya_miniapp_api.api.local_content import REVISION_ID, published_scene
 
 
 def _catalog() -> dict[str, Any]:
@@ -23,6 +27,7 @@ def _catalog() -> dict[str, Any]:
                 "series": "日常英语",
                 "tags": ["开放学习场景"],
                 "title": "Discussing the Castle Exhibit",
+                "trial_sentence": "What do you think of the castle exhibit?",
             },
             {
                 "access": "OPEN",
@@ -33,6 +38,7 @@ def _catalog() -> dict[str, Any]:
                 "series": "日常英语",
                 "tags": ["开放学习场景"],
                 "title": "Ordering Breakfast",
+                "trial_sentence": "I'd like some breakfast, please.",
             },
             {
                 "access": "OPEN",
@@ -43,6 +49,7 @@ def _catalog() -> dict[str, Any]:
                 "series": "日常英语",
                 "tags": ["开放学习场景"],
                 "title": "At the Coffee Shop",
+                "trial_sentence": "Could I get a latte, please?",
             },
             {
                 "access": "PREVIEW",
@@ -186,14 +193,14 @@ def _message() -> dict[str, Any]:
     }
 
 
-def _silent_wav() -> bytes:
+def _silent_wav(seconds: int = 1) -> bytes:
     """生成一秒静音 WAV，供本地音频播放链路联调。"""
     output = io.BytesIO()
     with wave.open(output, "wb") as audio:
         audio.setnchannels(1)
         audio.setsampwidth(2)
         audio.setframerate(8_000)
-        audio.writeframes(b"\x00\x00" * 8_000)
+        audio.writeframes(b"\x00\x00" * 8_000 * seconds)
     return output.getvalue()
 
 
@@ -202,6 +209,8 @@ class LocalDevState:
 
     def __init__(self) -> None:
         self.catalog = _catalog()
+        self.prompt_exposures: set[str] = set()
+        self.deletion: dict[str, Any] | None = None
         self.contact: dict[str, Any] | None = {
             "can_self_edit": True,
             "change_pending": False,
@@ -280,6 +289,16 @@ def create_local_dev_router() -> APIRouter:
             "juya_id": "JY-LOCAL-0001",
             "nickname": "本地小芽",
             "wechat_nickname": None,
+            "deletion": deepcopy(state.deletion),
+            "contact_prompt_eligible": (
+                state.contact is None
+                and not state.prompt_exposures
+                and sum(
+                    item.get("access") == "OPEN" and item.get("progress") == 100
+                    for item in state.catalog["items"]
+                )
+                >= 3
+            ),
         }
 
     @router.get("/api/v1/me/contact")
@@ -316,6 +335,16 @@ def create_local_dev_router() -> APIRouter:
             "status": "PENDING",
         }
 
+    @router.post("/api/v1/me/contact/prompt-exposures")
+    async def prompt_exposure(request: Request) -> dict[str, bool]:
+        """按实际请求幂等键登记本地提示曝光。"""
+        key = request.headers.get("Idempotency-Key") or request.headers.get("X-Idempotency-Key")
+        if not key:
+            raise HTTPException(422, "Idempotency-Key required")
+        created = not state.prompt_exposures
+        state.prompt_exposures.add(key)
+        return {"created": created}
+
     @router.get("/api/v1/me/entitlements")
     async def get_entitlements() -> dict[str, Any]:
         """返回正式权益与限时权益。"""
@@ -350,9 +379,93 @@ def create_local_dev_router() -> APIRouter:
     @router.post("/api/v1/scenes/{scene_id}/open")
     async def open_scene(scene_id: str) -> dict[str, Any]:
         """返回指定场景，本地数据统一复用完整示例内容。"""
-        result = _scene()
-        result["scene"]["scene_id"] = scene_id
-        return result
+        return published_scene(scene_id, _scene())
+
+    @router.get("/api/v1/scenes/{scene_id}/entries/{entry_id}")
+    async def get_entry(
+        scene_id: str, entry_id: str, revision_id: str, entry_version: int, source_locator: str
+    ) -> dict[str, Any]:
+        """读取固定修订、词条版本与来源对应的本地词卡。"""
+        opened = published_scene(scene_id, _scene())
+        if opened["access"] == "PREVIEW":
+            raise HTTPException(403, "Scene access denied")
+        if revision_id != REVISION_ID:
+            raise HTTPException(409, "Scene revision changed")
+        content = opened["scene"]["content"]
+        for entry_type, rows in (
+            ("VOCABULARY", content["vocabulary"]),
+            ("PHRASE", content["chunks"]),
+        ):
+            for entry in rows:
+                if entry["entry_id"] != entry_id or entry["entry_version"] != entry_version:
+                    continue
+                locators = {f"{'chunks' if entry_type == 'PHRASE' else 'vocabulary'}:{entry_id}"}
+                locators.update(
+                    f"sentence:{sid}:entry:{entry_id}" for sid in entry["source_sentence_ids"]
+                )
+                if source_locator not in locators:
+                    raise HTTPException(404, "Source not found")
+                snapshot = "\n".join(
+                    row["english"]
+                    for row in content["dialogue"]
+                    if row["id"] in entry["source_sentence_ids"]
+                )
+                return {
+                    **entry,
+                    "scene_id": scene_id,
+                    "revision_id": revision_id,
+                    "source_locator": source_locator,
+                    "entry_type": entry_type,
+                    "sentence_snapshot": snapshot or entry["english"],
+                }
+        raise HTTPException(404, "Entry not found")
+
+    @router.get("/api/v1/scenes/{scene_id}/resources/{resource_id}/signed-url")
+    async def sign_resource(
+        scene_id: str, resource_id: str, revision_id: str, request: Request, response: Response
+    ) -> dict[str, str]:
+        """只给当前场景固定修订实际引用的资源返回本地地址。"""
+        opened = published_scene(scene_id, _scene())
+        if opened["access"] == "PREVIEW":
+            raise HTTPException(403, "Scene access denied")
+        if revision_id != REVISION_ID:
+            raise HTTPException(409, "Scene revision changed")
+        content = opened["scene"]["content"]
+        refs = {
+            content["original_image_asset_id"],
+            content["cover_asset_id"],
+            content["audio"]["target_id"],
+        }
+        refs.update(
+            entry.get("audio_target_id") for entry in content["vocabulary"] + content["chunks"]
+        )
+        if resource_id not in refs:
+            raise HTTPException(404, "Resource not referenced")
+        response.headers["Cache-Control"] = "private, no-store"
+        base = str(request.base_url).rstrip("/")
+        return {
+            "resource_id": resource_id,
+            "expires_at": "2099-01-01T00:00:00Z",
+            "url": f"{base}/local-dev/resources/{resource_id}",
+        }
+
+    @router.get("/local-dev/resources/{resource_id}")
+    def resource_bytes(resource_id: str) -> Response:
+        """提供本地演示原图或合成静音音频，不能作为真机试听证据。"""
+        if resource_id in {"coffee-original", "coffee-cover"}:
+            asset = Path(__file__).resolve().parents[3] / "fixtures" / "coffee-original.png"
+            if not asset.is_file():
+                raise HTTPException(404, "Local image unavailable")
+            return FileResponse(asset, media_type="image/png")
+        if resource_id in {
+            "coffee-audio",
+            "castle-audio",
+            "latte-audio",
+            "audio-evolved",
+            "audio-put-together",
+        }:
+            return Response(_silent_wav(138), media_type="audio/wav")
+        raise HTTPException(404, "Resource not found")
 
     @router.put("/api/v1/scenes/{scene_id}/progress")
     async def save_progress(scene_id: str, request: Request) -> dict[str, Any]:
@@ -523,7 +636,11 @@ def create_local_dev_router() -> APIRouter:
         """追加本地反馈补充说明。"""
         payload = await request.json()
         item = state.feedback.get(feedback_id, _feedback())
-        item["status"] = "SUPPLEMENTED"
+        images = payload.get("screenshots", [])
+        if len(images) > 1 or (images and item.get("screenshots")):
+            raise HTTPException(422, "Each feedback accepts one screenshot")
+        item["screenshots"] = item.get("screenshots", []) + images
+        item["status"] = "USER_SUPPLIED"
         item.setdefault("supplements", []).append(
             {
                 "created_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -544,7 +661,7 @@ def create_local_dev_router() -> APIRouter:
         state.feedback[feedback_id] = item
         return deepcopy(item)
 
-    @router.delete("/api/v1/me/learning-data")
+    @router.delete("/api/v1/me/learning-data", status_code=204)
     async def clear_learning_data() -> None:
         """清理本地学习进度、收藏和消息已读状态。"""
         for item in state.catalog["items"]:
@@ -554,25 +671,26 @@ def create_local_dev_router() -> APIRouter:
     @router.post("/api/v1/me/deletion")
     async def request_deletion() -> dict[str, Any]:
         """返回本地账号注销等待期。"""
-        return {
+        if state.deletion and state.deletion["status"] == "PENDING":
+            return deepcopy(state.deletion)
+        now = datetime.now(UTC)
+        state.deletion = {
             "completed_at": None,
-            "effective_at": "2026-10-05T08:30:00Z",
+            "effective_at": (now + timedelta(days=7)).isoformat(),
             "id": "local-deletion",
-            "requested_at": "2026-09-28T08:30:00Z",
+            "requested_at": now.isoformat(),
             "revoked_at": None,
             "status": "PENDING",
         }
+        return deepcopy(state.deletion)
 
     @router.post("/api/v1/me/deletion/revoke")
     async def revoke_deletion() -> dict[str, Any]:
         """撤回本地账号注销申请。"""
-        return {
-            "completed_at": None,
-            "effective_at": "2026-10-05T08:30:00Z",
-            "id": "local-deletion",
-            "requested_at": "2026-09-28T08:30:00Z",
-            "revoked_at": "2026-09-28T11:30:00Z",
-            "status": "REVOKED",
-        }
+        if not state.deletion:
+            raise HTTPException(409, "No pending deletion")
+        state.deletion["status"] = "REVOKED"
+        state.deletion["revoked_at"] = datetime.now(UTC).isoformat()
+        return deepcopy(state.deletion)
 
     return router

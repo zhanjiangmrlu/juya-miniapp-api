@@ -45,6 +45,9 @@ class ContactService:
             raise AppError("IDEMPOTENCY_KEY_INVALID", "幂等键无效", 422)
         return await self._repository.record_prompt_exposure(user_id, idempotency_key, now)
 
+    async def has_prompt_exposure(self, user_id: str) -> bool:
+        return await self._repository.has_prompt_exposure(user_id)
+
     async def get(self, user_id: str) -> ContactView | None:
         record = await self._repository.get_contact(user_id)
         return self._view(record) if record is not None else None

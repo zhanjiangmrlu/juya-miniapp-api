@@ -21,7 +21,13 @@ class FeedbackClient(Protocol):
     async def get_feedback(self, feedback_id: str) -> dict[str, Any]: ...
 
     async def supplement_feedback(
-        self, feedback_id: str, user_id: str, text: str, idempotency_key: str
+        self,
+        feedback_id: str,
+        user_id: str,
+        text: str,
+        idempotency_key: str,
+        *,
+        screenshots: list[str] | None = None,
     ) -> dict[str, Any]: ...
 
     async def resolve_feedback(
@@ -81,12 +87,25 @@ class FeedbackService:
         feedback_id: str,
         text: str,
         idempotency_key: str,
+        *,
+        screenshots: list[str] | None = None,
     ) -> dict[str, Any]:
         item = await self._client.get_feedback(feedback_id)
         self._assert_owner(item, user_id)
         cleaned = text.strip()
         if not cleaned or len(cleaned) > 300:
             raise AppError("FEEDBACK_SUPPLEMENT_INVALID", "补充内容需为1至300字", 422)
+        if self._require_review:
+            ensure_safe_feedback(cleaned)
+        images = screenshots or []
+        if len(images) > 1 or (images and item.get("screenshots")):
+            raise AppError("FEEDBACK_SCREENSHOT_LIMIT", "每条反馈最多上传1张截图", 422)
+        if any(not key.startswith(f"feedback/{user_id}/") for key in images):
+            raise AppError("FEEDBACK_SCREENSHOT_INVALID", "反馈截图无效", 422)
+        if images:
+            return await self._client.supplement_feedback(
+                feedback_id, user_id, cleaned, idempotency_key, screenshots=images
+            )
         return await self._client.supplement_feedback(
             feedback_id, user_id, cleaned, idempotency_key
         )

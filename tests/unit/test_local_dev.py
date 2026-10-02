@@ -53,7 +53,7 @@ async def test_local_dev_mode_preserves_mutable_feedback_and_message_state() -> 
 
     assert created.status_code == 200
     assert created.json()["description"] == "本地联调反馈"
-    assert supplemented.json()["status"] == "SUPPLEMENTED"
+    assert supplemented.json()["status"] == "USER_SUPPLIED"
     assert supplemented.json()["supplements"][-1]["text"] == "补充说明"
     assert read_message.json()["read_at"] is not None
 

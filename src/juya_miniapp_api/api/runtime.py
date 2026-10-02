@@ -200,8 +200,12 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         endpoint=settings.oss_endpoint,
         credentials_provider=uploads._credentials,
     )
+    user_repository = SQLAlchemyUserRepository(sessions)
     user_service = UserService(
-        SQLAlchemyUserRepository(sessions), contact_service, avatar_verifier=avatar_store.confirm
+        user_repository,
+        contact_service,
+        avatar_verifier=avatar_store.confirm,
+        open_completion_count=user_repository.count_open_completions,
     )
     account_service = AccountLifecycleService(
         SQLAlchemyAccountRepository(sessions), session_service.revoke_all
@@ -215,7 +219,12 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
             user_dependency=current_user,
             rate_limiter=rate_limiter,
         ),
-        create_learning_router(learning_service, learning_repository, user_dependency=current_user),
+        create_learning_router(
+            learning_service,
+            learning_repository,
+            user_dependency=current_user,
+            achievement_reader=user_repository.learning_achievements,
+        ),
         create_checkins_router(
             SQLAlchemyCheckinRepository(sessions),
             user_dependency=current_user,

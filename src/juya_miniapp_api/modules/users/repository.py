@@ -1,15 +1,17 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Protocol
 
 from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from juya_miniapp_api.modules.checkins.service import beijing_learning_date, summarize_checkins
 from juya_miniapp_api.modules.users.models import UserProfile
 from juya_miniapp_api.shared.errors import AppError
 
 
 class UserRepository(Protocol):
+    async def pending_deletion(self, public_id: str) -> dict[str, object] | None: ...
     async def get_profile(self, public_id: str) -> UserProfile | None: ...
 
     async def update_profile(
@@ -26,6 +28,9 @@ class UserRepository(Protocol):
 
 
 class InMemoryUserRepository:
+    async def pending_deletion(self, public_id: str) -> dict[str, object] | None:
+        return None
+
     def __init__(self) -> None:
         self.profiles: dict[str, UserProfile] = {}
 
@@ -88,6 +93,86 @@ def _utc(value: datetime | None) -> datetime | None:
 
 
 class SQLAlchemyUserRepository:
+    async def pending_deletion(self, public_id: str) -> dict[str, object] | None:
+        async with self._session_factory() as session:
+            row = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT d.status,d.effective_at FROM account_deletion_request d "
+                            "JOIN user_account u ON u.id=d.user_id WHERE u.public_id=:user "
+                            "AND d.status='PENDING' ORDER BY d.id DESC LIMIT 1"
+                        ),
+                        {"user": public_id},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+        return dict(row) if row else None
+
+    async def learning_achievements(self, public_id: str) -> dict[str, int]:
+        async with self._session_factory() as session:
+            completed = await session.scalar(
+                text(
+                    "SELECT COUNT(*) FROM learning_progress p "
+                    "JOIN user_account u ON u.id=p.user_id "
+                    "WHERE u.public_id=:user AND p.completed_at IS NOT NULL"
+                ),
+                {"user": public_id},
+            )
+            favorites = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT f.entry_type,COUNT(*) AS total FROM favorite_entry f "
+                            "JOIN user_account u ON u.id=f.user_id "
+                            "WHERE u.public_id=:user GROUP BY f.entry_type"
+                        ),
+                        {"user": public_id},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            days: list[date] = list(
+                (
+                    await session.execute(
+                        text(
+                            "SELECT d.beijing_date FROM daily_checkin d "
+                            "JOIN user_account u ON u.id=d.user_id "
+                            "WHERE u.public_id=:user ORDER BY d.beijing_date"
+                        ),
+                        {"user": public_id},
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        counts = {row["entry_type"]: int(row["total"]) for row in favorites}
+        summary = summarize_checkins(days, today=beijing_learning_date(datetime.now(UTC)))
+        return {
+            "completed_scenes": int(completed or 0),
+            "streak_days": summary.current_streak,
+            "learning_days": summary.total_days,
+            "favorite_vocabulary": counts.get("VOCABULARY", 0),
+            "favorite_phrases": counts.get("PHRASE", 0),
+        }
+
+    async def count_open_completions(self, public_id: str) -> int:
+        async with self._session_factory() as session:
+            count = await session.scalar(
+                text(
+                    "SELECT COUNT(DISTINCT p.scene_id) FROM learning_progress p "
+                    "JOIN user_account u ON u.id=p.user_id JOIN scene s ON s.public_id=p.scene_id "
+                    "JOIN open_scene_item i ON i.scene_id=s.id "
+                    "WHERE u.public_id=:user AND p.completed_at IS NOT NULL "
+                    "AND i.config_id=(SELECT MAX(id) FROM open_scene_config)"
+                ),
+                {"user": public_id},
+            )
+            return int(count or 0)
+
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 

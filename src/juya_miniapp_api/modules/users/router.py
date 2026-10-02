@@ -45,6 +45,8 @@ def serialize_me(view: MeView) -> dict[str, object]:
         "created_at": view.profile.created_at,
         "last_active_at": view.profile.last_active_at,
         "contact": _contact(view.contact),
+        "contact_prompt_eligible": view.contact_prompt_eligible,
+        "deletion": view.deletion,
     }
 
 

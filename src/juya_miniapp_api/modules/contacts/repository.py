@@ -38,6 +38,8 @@ _SAFE_CONTACT_EVENT_TYPES = frozenset(
 
 
 class ContactRepository(Protocol):
+    async def has_prompt_exposure(self, user_id: str) -> bool: ...
+
     async def record_prompt_exposure(
         self,
         user_id: str,
@@ -109,10 +111,13 @@ class InMemoryContactRepository:
         del now
         async with self._lock:
             key = (user_id, idempotency_key)
-            if key in self.prompt_exposures:
+            if await self.has_prompt_exposure(user_id):
                 return False
             self.prompt_exposures.add(key)
             return True
+
+    async def has_prompt_exposure(self, user_id: str) -> bool:
+        return any(owner == user_id for owner, _ in self.prompt_exposures)
 
     async def get_contact(self, user_id: str) -> ContactRecord | None:
         return self.records.get(user_id)
@@ -405,6 +410,8 @@ class SQLAlchemyContactRepository:
     ) -> bool:
         async with self._session_factory() as session, session.begin():
             internal_id = await self._lock_user(session, user_id)
+            if await self._has_prompt_exposure(session, user_id):
+                return False
             return await append_contact_event(
                 session,
                 payload={"contact_cohort": uuid4().hex},
@@ -413,6 +420,21 @@ class SQLAlchemyContactRepository:
                 user_id=internal_id,
                 occurred_at=now,
             )
+
+    async def has_prompt_exposure(self, user_id: str) -> bool:
+        async with self._session_factory() as session:
+            return await self._has_prompt_exposure(session, user_id)
+
+    @staticmethod
+    async def _has_prompt_exposure(session: AsyncSession, user_id: str) -> bool:
+        exposed = await session.scalar(
+            text(
+                "SELECT 1 FROM analytics_event e JOIN user_account u ON u.id=e.user_id "
+                "WHERE u.public_id=:user AND e.event_type='CONTACT_PROMPT_EXPOSED' LIMIT 1"
+            ),
+            {"user": user_id},
+        )
+        return exposed is not None
 
     async def get_contact(self, user_id: str) -> ContactRecord | None:
         async with self._session_factory() as session:

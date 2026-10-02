@@ -4312,6 +4312,14 @@
             "maxLength": 300,
             "minLength": 1,
             "title": "Text"
+          },
+          "screenshots": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 1,
+            "title": "Screenshots"
           }
         },
         "additionalProperties": false,

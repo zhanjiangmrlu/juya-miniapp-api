@@ -14,6 +14,8 @@ from juya_miniapp_api.shared.errors import AppError
 class MeView:
     profile: UserProfile
     contact: ContactView | None
+    contact_prompt_eligible: bool = False
+    deletion: dict[str, object] | None = None
 
 
 class UserService:
@@ -23,16 +25,31 @@ class UserService:
         contacts: ContactService,
         *,
         avatar_verifier: Callable[[str, str], Awaitable[str]] | None = None,
+        open_completion_count: Callable[[str], Awaitable[int]] | None = None,
     ) -> None:
         self._repository = repository
         self._contacts = contacts
         self._avatar_verifier = avatar_verifier
+        self._open_completion_count = open_completion_count
 
     async def get_me(self, public_id: str) -> MeView:
         profile = await self._repository.get_profile(public_id)
         if profile is None:
             raise AppError("USER_NOT_FOUND", "用户不存在", 404)
-        return MeView(profile, await self._contacts.get(public_id))
+        contact = await self._contacts.get(public_id)
+        eligible = (
+            profile.status == "ACTIVE"
+            and contact is None
+            and self._open_completion_count is not None
+            and await self._open_completion_count(public_id) >= 3
+            and not await self._contacts.has_prompt_exposure(public_id)
+        )
+        deletion = (
+            await self._repository.pending_deletion(public_id)
+            if profile.status == "DELETION_PENDING"
+            else None
+        )
+        return MeView(profile, contact, eligible, deletion)
 
     async def update_profile(
         self,

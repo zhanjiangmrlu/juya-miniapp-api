@@ -169,12 +169,22 @@ class AdminApiClient:
         return await self._request_json("GET", f"/internal/v1/feedback/{feedback_id}")
 
     async def supplement_feedback(
-        self, feedback_id: str, user_id: str, text: str, idempotency_key: str
+        self,
+        feedback_id: str,
+        user_id: str,
+        text: str,
+        idempotency_key: str,
+        *,
+        screenshots: list[str] | None = None,
     ) -> dict[str, Any]:
         return await self._request_json(
             "POST",
             f"/internal/v1/feedback/{feedback_id}/supplements",
-            {"user_id": user_id, "text": text},
+            {
+                "user_id": user_id,
+                "text": text,
+                **({"screenshots": screenshots} if screenshots else {}),
+            },
             idempotency_key=idempotency_key,
             idempotency_header="X-Idempotency-Key",
         )
