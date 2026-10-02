@@ -226,7 +226,13 @@ def test_normal_runtime_over_socket_closes_miniapp_user_flows(tmp_path: Path) ->
             )
             assert login.status_code == 200, login.text
             user = login.json()["user"]["public_id"]
-            client.headers["Authorization"] = "Bearer " + login.json()["access_token"]
+            refreshed = client.post(
+                "/api/v1/session/refresh",
+                json={"refresh_token": login.json()["refresh_token"]},
+            )
+            assert refreshed.status_code == 200, refreshed.text
+            assert refreshed.json()["refresh_token"] != login.json()["refresh_token"]
+            client.headers["Authorization"] = "Bearer " + refreshed.json()["access_token"]
             me = client.get("/api/v1/me")
             assert me.status_code == 200 and not me.json()["contact_prompt_eligible"]
             assert client.get("/api/v1/home").status_code == 200

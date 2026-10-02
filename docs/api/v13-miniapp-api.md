@@ -1,11 +1,22 @@
 # Juya Miniapp API 接口文档
 
-> 文档基线：juya-miniapp-api main 分支，2026-10-01 V1.3 实施
+> 文档基线：juya-miniapp-api main 分支，2026-10-02 小程序全量设计还原集成
 > 服务版本：0.1.0
-> 整理日期：2026-10-01
+> 整理日期：2026-10-02
 > 依据：当前 FastAPI 实际挂载路由、请求模型、领域服务和下游客户端实现
 
 ## 1. 文档范围
+
+### 2026-10-02 小程序接口适配
+
+- GET /api/v1/me 返回当前 deletion 摘要与 contact_prompt_eligible；待注销冷启动可恢复等待页，撤回后摘要为空。联系提示条件为完成至少三个当前开放场景、从未填写/撤回联系资料且从未曝光
+- GET /api/v1/learning/catalog 仅向 OPEN 摘要投影 trial_sentence，页面预览不调用场景 open，也不登记学习开始。PREVIEW 不返回正文或试学句
+- GET /api/v1/me/entitlements 对每个限时活动返回固定 scene_ids、server_now 与 achievements；成果按活动有效窗口和固定场景统计，学习天数为实际活跃日
+- GET /api/v1/scenes/{scene_id}/result 保留进度字段，并返回学习成果统计供完成页消费
+- POST /api/v1/feedback/{feedback_id}/supplements 支持可选 screenshots；整个反馈最多一张，缺省空数组兼容旧请求。详情返回处理时间线和补充信息，列表经过后台本人查询接口
+- POST /api/v1/me/contact/prompt-exposures 以用户维度去重，多个设备/幂等键不会重复登记；正式 Idempotency-Key 与旧 X-Idempotency-Key 的客户端兼容处理保持可用
+
+接口路径和鉴权保持兼容，无新增数据库迁移。2026-10-02 隔离 MySQL/Redis 全套为 137 passed、1 skipped；正式路由 socket 测试覆盖登录、刷新令牌轮换、场景/权威词条/修订签名、收藏、权益、联系、反馈补充/重开、清空和注销撤回。外部微信兑换使用测试提供者，不代表云端登录或 OSS 字节读取验收。
 
 本文档记录 juya-miniapp-api 当前实现的全部 HTTP 接口：
 
@@ -1190,7 +1201,7 @@ GET /api/v1/scenes/{scene_id}/resources/{resource_id}/signed-url?revision_id=...
 
 POST /api/v1/favorites 请求增加 revision_id、entry_version，允许 sentence_snapshot省略/为空；服务使用授权返回的词条与上下文，拒绝客户端伪造快照。来源不同revision保持独立；词汇/语块列表来源没有句子时用权威英文，跨行语块保留全部句子。复习队列分页与今日任务不以10张为总量上限，SQL验收覆盖125条。
 
-POST /api/v1/me/contact/prompt-exposures 接收合法固定入口与Idempotency-Key，接口完成，真实曝光触发随小程序延期。成功学习/收藏/复习/联系方式/注销事件事务去重；自然周/月独立活跃人数由日汇总生产者生成，注销去除用户关联。学习写入本身亦实时校验场景权益，拒绝未经授权或授权服务不可用的进度/完成数据。
+POST /api/v1/me/contact/prompt-exposures 接收合法固定入口与Idempotency-Key。2026-10-02 小程序已接入实际可见后曝光；同一用户跨设备和幂等键只记一次。成功学习/收藏/复习/联系方式/注销事件事务去重；自然周/月独立活跃人数由日汇总生产者生成，注销去除用户关联。学习写入本身亦实时校验场景权益，拒绝未经授权或授权服务不可用的进度/完成数据。
 
 正式期限 wire 值为 month_1、month_2、month_3、month_6、month_12、permanent；后端自然月与权益生命周期沿用。前端后续需消费Unicode片段偏移、整段音频区间、原图鉴权、空发音、版本冲突刷新和不限量复习；微信真机/登录供应商与设计稿不由本轮后端验收替代。
 
