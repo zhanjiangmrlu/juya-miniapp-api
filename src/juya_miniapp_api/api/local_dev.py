@@ -277,9 +277,14 @@ def create_local_dev_router() -> APIRouter:
         }
 
     @router.get("/api/v1/learning/catalog")
-    async def get_catalog() -> dict[str, Any]:
+    async def get_catalog(request: Request) -> dict[str, Any]:
         """返回当前本地学习目录快照。"""
-        return deepcopy(state.catalog)
+        catalog = deepcopy(state.catalog)
+        for item in catalog["items"]:
+            item["image_url"] = (
+                f"{str(request.base_url).rstrip('/')}/local-dev/resources/coffee-cover"
+            )
+        return catalog
 
     @router.get("/api/v1/me")
     async def get_profile() -> dict[str, Any]:
