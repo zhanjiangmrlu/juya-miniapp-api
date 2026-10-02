@@ -12,6 +12,8 @@ from fastapi.responses import FileResponse
 
 from juya_miniapp_api.api.local_content import REVISION_ID, published_scene
 
+_FIXTURES = Path(__file__).resolve().parents[3] / "fixtures"
+
 
 def _catalog() -> dict[str, Any]:
     """创建可独立修改的本地学习目录。"""
@@ -454,7 +456,7 @@ def create_local_dev_router() -> APIRouter:
             "url": f"{base}/local-dev/resources/{resource_id}",
         }
 
-    @router.get("/local-dev/resources/{resource_id}")
+    @router.api_route("/local-dev/resources/{resource_id}", methods=["GET", "HEAD"])
     def resource_bytes(resource_id: str) -> Response:
         """提供本地演示原图或合成静音音频，不能作为真机试听证据。"""
         if resource_id in {"coffee-original", "coffee-cover"}:
@@ -469,7 +471,8 @@ def create_local_dev_router() -> APIRouter:
             "audio-evolved",
             "audio-put-together",
         }:
-            return Response(_silent_wav(138), media_type="audio/wav")
+            asset = _FIXTURES / "silence-138.wav"
+            return FileResponse(asset, media_type="audio/wav")
         raise HTTPException(404, "Resource not found")
 
     @router.put("/api/v1/scenes/{scene_id}/progress")
@@ -510,11 +513,12 @@ def create_local_dev_router() -> APIRouter:
             "url": f"{base_url}/local-dev/media/{target_id}.wav",
         }
 
-    @router.get("/local-dev/media/{target_id}.wav")
+    @router.api_route("/local-dev/media/{target_id}.wav", methods=["GET", "HEAD"])
     async def get_local_audio(target_id: str) -> Response:
         """提供静音音频响应以验证本地播放器状态机。"""
         _ = target_id
-        return Response(_silent_wav(), media_type="audio/wav")
+        asset = _FIXTURES / "silence-1.wav"
+        return FileResponse(asset, media_type="audio/wav")
 
     @router.get("/api/v1/favorites")
     async def list_favorites() -> dict[str, Any]:
