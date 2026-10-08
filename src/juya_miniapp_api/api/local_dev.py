@@ -11,6 +11,8 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 
 from juya_miniapp_api.api.local_content import REVISION_ID, published_scene
+from juya_miniapp_api.modules.favorites.router import FavoriteRequest
+from juya_miniapp_api.modules.favorites.service import normalize_favorite_key
 
 _FIXTURES = Path(__file__).resolve().parents[3] / "fixtures"
 
@@ -145,23 +147,75 @@ def _scene() -> dict[str, Any]:
 
 
 def _favorite() -> dict[str, Any]:
-    """创建默认收藏条目。"""
+    """从本地发布词卡创建带可定位来源的默认收藏"""
+    entry = _local_entry(
+        "scene-castle", "word-evolved", REVISION_ID, 1, "sentence:sentence-2:entry:word-evolved"
+    )
+    return _favorite_item(entry, "favorite-evolved")
+
+
+def _favorite_item(entry: dict[str, Any], favorite_id: str) -> dict[str, Any]:
+    """将已解析发布词卡 entry 保存为指定 favorite_id 的收藏契约"""
     return {
-        "entry_stable_id": "word-evolved",
-        "entry_type": "VOCABULARY",
-        "favorited_at": "2026-09-28T08:30:00Z",
-        "id": "favorite-evolved",
+        "entry_stable_id": entry["entry_id"],
+        "entry_type": entry["entry_type"],
+        "favorited_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "id": favorite_id,
         "last_reviewed_at": None,
-        "normalized_key": "evolved",
+        "normalized_key": normalize_favorite_key(entry["english"]),
         "sources": [
             {
-                "original_link": "/scenes/scene-castle#sentence-2",
-                "scene_id": "scene-castle",
-                "sentence_snapshot": "The castle evolved.",
-                "source_locator": "sentence-2",
+                "original_link": f"/scenes/{entry['scene_id']}",
+                "scene_id": entry["scene_id"],
+                "sentence_snapshot": entry["sentence_snapshot"],
+                "source_locator": entry["source_locator"],
+                "revision_id": entry["revision_id"],
+                "entry_version": entry["entry_version"],
+                "entry_snapshot": deepcopy(entry),
             }
         ],
     }
+
+
+def _local_entry(
+    scene_id: str, entry_id: str, revision_id: str, entry_version: int, source_locator: str
+) -> dict[str, Any]:
+    """按 scene_id、entry_id、revision_id、entry_version 和 source_locator 解析发布词卡"""
+    if not any(item["scene_id"] == scene_id for item in _catalog()["items"]):
+        raise HTTPException(404, "Scene not found")
+    opened = published_scene(scene_id, _scene())
+    if opened["access"] == "PREVIEW":
+        raise HTTPException(403, "Scene access denied")
+    if revision_id != REVISION_ID:
+        raise HTTPException(409, "Scene revision changed")
+    content = opened["scene"]["content"]
+    for entry_type, rows in (
+        ("VOCABULARY", content["vocabulary"]),
+        ("PHRASE", content["chunks"]),
+    ):
+        for entry in rows:
+            if entry["entry_id"] != entry_id or entry["entry_version"] != entry_version:
+                continue
+            locators = {f"{'chunks' if entry_type == 'PHRASE' else 'vocabulary'}:{entry_id}"}
+            locators.update(
+                f"sentence:{sid}:entry:{entry_id}" for sid in entry["source_sentence_ids"]
+            )
+            if source_locator not in locators:
+                raise HTTPException(404, "Source not found")
+            snapshot = "\n".join(
+                row["english"]
+                for row in content["dialogue"]
+                if row["id"] in entry["source_sentence_ids"]
+            )
+            return {
+                **entry,
+                "scene_id": scene_id,
+                "revision_id": revision_id,
+                "source_locator": source_locator,
+                "entry_type": entry_type,
+                "sentence_snapshot": snapshot or entry["english"],
+            }
+    raise HTTPException(404, "Entry not found")
 
 
 def _feedback() -> dict[str, Any]:
@@ -393,39 +447,7 @@ def create_local_dev_router() -> APIRouter:
         scene_id: str, entry_id: str, revision_id: str, entry_version: int, source_locator: str
     ) -> dict[str, Any]:
         """读取固定修订、词条版本与来源对应的本地词卡。"""
-        opened = published_scene(scene_id, _scene())
-        if opened["access"] == "PREVIEW":
-            raise HTTPException(403, "Scene access denied")
-        if revision_id != REVISION_ID:
-            raise HTTPException(409, "Scene revision changed")
-        content = opened["scene"]["content"]
-        for entry_type, rows in (
-            ("VOCABULARY", content["vocabulary"]),
-            ("PHRASE", content["chunks"]),
-        ):
-            for entry in rows:
-                if entry["entry_id"] != entry_id or entry["entry_version"] != entry_version:
-                    continue
-                locators = {f"{'chunks' if entry_type == 'PHRASE' else 'vocabulary'}:{entry_id}"}
-                locators.update(
-                    f"sentence:{sid}:entry:{entry_id}" for sid in entry["source_sentence_ids"]
-                )
-                if source_locator not in locators:
-                    raise HTTPException(404, "Source not found")
-                snapshot = "\n".join(
-                    row["english"]
-                    for row in content["dialogue"]
-                    if row["id"] in entry["source_sentence_ids"]
-                )
-                return {
-                    **entry,
-                    "scene_id": scene_id,
-                    "revision_id": revision_id,
-                    "source_locator": source_locator,
-                    "entry_type": entry_type,
-                    "sentence_snapshot": snapshot or entry["english"],
-                }
-        raise HTTPException(404, "Entry not found")
+        return _local_entry(scene_id, entry_id, revision_id, entry_version, source_locator)
 
     @router.get("/api/v1/scenes/{scene_id}/resources/{resource_id}/signed-url")
     async def sign_resource(
@@ -530,11 +552,19 @@ def create_local_dev_router() -> APIRouter:
         }
 
     @router.post("/api/v1/favorites")
-    async def create_favorite(request: Request) -> dict[str, Any]:
-        """创建并保存本地收藏。"""
-        payload = await request.json()
+    async def create_favorite(payload: FavoriteRequest) -> dict[str, Any]:
+        """按正式请求 payload 解析发布来源并保存本地收藏"""
+        entry = _local_entry(
+            payload.scene_id,
+            payload.entry_stable_id,
+            payload.revision_id,
+            payload.entry_version,
+            payload.source_locator,
+        )
+        if payload.entry_type != entry["entry_type"]:
+            raise HTTPException(422, "Entry type does not match published entry")
         favorite_id = f"local-favorite-{len(state.favorites) + 1}"
-        item = {**payload, "id": favorite_id}
+        item = _favorite_item(entry, favorite_id)
         state.favorites[favorite_id] = item
         return deepcopy(item)
 
