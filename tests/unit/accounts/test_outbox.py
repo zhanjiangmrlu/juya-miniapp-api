@@ -13,6 +13,10 @@ NOW = datetime(2026, 9, 28, 8, 0, tzinfo=UTC)
 
 @pytest.mark.asyncio
 async def test_outbox_retries_with_exponential_backoff_then_dead_letters() -> None:
+    # 功能:验证发件箱失败按指数退避重试并最终进入死信
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     event = OutboxEvent(
         "event-1",
         "ACCOUNT_DELETION_CLEANUP",
@@ -26,6 +30,10 @@ async def test_outbox_retries_with_exponential_backoff_then_dead_letters() -> No
     store = InMemoryOutboxStore([event])
 
     async def fail(_event: OutboxEvent) -> None:
+        # 功能:在测试中模拟发件箱投递失败以验证退避与死信
+        # 参数:
+        #     _event: 模拟投递失败的发件箱事件,测试桩不读取具体字段
+        # 返回:无返回值。
         raise RuntimeError("upstream unavailable")
 
     dispatcher = OutboxDispatcher(store, fail, max_attempts=3, base_delay=timedelta(seconds=10))
@@ -48,6 +56,10 @@ async def test_outbox_retries_with_exponential_backoff_then_dead_letters() -> No
 
 @pytest.mark.asyncio
 async def test_outbox_delivers_each_event_once() -> None:
+    # 功能:验证发件箱每条事件只成功投递一次
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     event = OutboxEvent(
         "event-1",
         "ACCOUNT_DELETION_CLEANUP",
@@ -62,6 +74,10 @@ async def test_outbox_delivers_each_event_once() -> None:
     delivered: list[str] = []
 
     async def deliver(item: OutboxEvent) -> None:
+        # 功能:在测试中收集发件箱投递事件以验证恰好一次投递
+        # 参数:
+        #     item: 跨域清理发件箱事件
+        # 返回:无返回值。
         delivered.append(item.id)
 
     dispatcher = OutboxDispatcher(store, deliver)
@@ -76,6 +92,10 @@ async def test_outbox_delivers_each_event_once() -> None:
 
 @pytest.mark.asyncio
 async def test_processing_event_is_recovered_after_worker_lease_expires() -> None:
+    # 功能:验证worker租约到期后可重新领取处理中的事件
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     event = OutboxEvent(
         "event-1",
         "ACCOUNT_DELETION_CLEANUP",
@@ -97,6 +117,10 @@ async def test_processing_event_is_recovered_after_worker_lease_expires() -> Non
 
 @pytest.mark.asyncio
 async def test_cleanup_callback_wins_race_with_dispatch_failure_writeback() -> None:
+    # 功能:验证成功清理回执不被并发的投递失败回写覆盖
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     event = OutboxEvent(
         "event-1",
         "ACCOUNT_DELETION_CLEANUP",

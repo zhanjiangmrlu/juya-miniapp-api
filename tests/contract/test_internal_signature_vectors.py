@@ -15,9 +15,20 @@ from juya_miniapp_api.shared.errors import AppError
 
 class MemoryNonceStore:
     def __init__(self) -> None:
+        # 功能:初始化小程序的MemoryNonceStore对象的状态存储
+        # 参数:
+        #     self: 当前小程序的MemoryNonceStore实例
+        # 返回:无返回值。
         self.seen: set[tuple[str, str]] = set()
 
     async def use_once(self, service_name: str, nonce: str, ttl_seconds: int) -> bool:
+        # 功能:在测试中原子记录内部签名随机数以阻止请求重放
+        # 参数:
+        #     self: 当前小程序的MemoryNonceStore实例
+        #     service_name: 健康检查或签名随机数隔离使用的服务名称
+        #     nonce: 内部请求签名的单次随机数
+        #     ttl_seconds: Redis缓存或防重放记录的存活秒数
+        # 返回:随机数是否首次成功登记;False表示已被使用
         assert ttl_seconds == INTERNAL_NONCE_TTL_SECONDS
         key = (service_name, nonce)
         if key in self.seen:
@@ -27,9 +38,18 @@ class MemoryNonceStore:
 
 
 def make_request(body: bytes, signature: str) -> Request:
+    # 功能:在测试中构造内部签名测试的ASGI请求与请求体接收器
+    # 参数:
+    #     body: 参与内部请求签名的原始请求体字节
+    #     signature: 客户端或测试预先计算的内部HMAC签名
+    # 返回:FastAPI请求对象
     delivered = False
 
     async def receive() -> dict[str, object]:
+        # 功能:在测试中向ASGI请求提供签名测试的原始请求体
+        # 参数:
+        #     无形参。
+        # 返回:包含类型、原始请求体与more_body标记的ASGI接收消息
         nonlocal delivered
         if delivered:
             return {"type": "http.request", "body": b"", "more_body": False}
@@ -59,6 +79,10 @@ def make_request(body: bytes, signature: str) -> Request:
 
 
 def test_signature_golden_vectors_include_empty_body_and_query() -> None:
+    # 功能:验证内部签名标准向量覆盖空请求体与查询串
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     assert (
         sign_request(
             "POST",
@@ -85,6 +109,10 @@ def test_signature_golden_vectors_include_empty_body_and_query() -> None:
 
 @pytest.mark.asyncio
 async def test_verify_rejects_expired_and_replayed_requests() -> None:
+    # 功能:验证内部签名拒绝过期请求与随机数重放
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     body = b"{}"
     signature = sign_request(
         "POST",

@@ -22,6 +22,17 @@ class ControlledCredentialsProvider:
         expires_at: datetime | None = None,
         from_environment: bool = False,
     ) -> None:
+        # 功能:初始化小程序的ControlledCredentialsProvider对象并保存所需依赖与配置
+        # 参数:
+        #     self: 当前小程序的ControlledCredentialsProvider实例
+        #     mode: OSS凭证来源模式,如静态凭证或实例角色
+        #     role_name: 从实例元数据获取OSS临时凭证的角色名称
+        #     access_key_id: OSS访问凭证标识
+        #     access_key_secret: OSS访问凭证签名密钥
+        #     security_token: OSS临时凭证附带的STS安全令牌
+        #     expires_at: 临时凭证或授权的绝对失效时间
+        #     from_environment: 是否允许从进程环境读取OSS凭证配置
+        # 返回:无返回值。
         self._values = (access_key_id, access_key_secret, security_token)
         self._expires_at = expires_at
         self._from_environment = from_environment or not any(self._values)
@@ -39,6 +50,10 @@ class ControlledCredentialsProvider:
         protect_sdk_logging()
 
     def get_credentials(self) -> Any:
+        # 功能:读取环境、实例角色或显式配置的OSS凭证并校验必需字段
+        # 参数:
+        #     self: 当前小程序的ControlledCredentialsProvider实例
+        # 返回:包含访问密钥、可选STS令牌和过期时间的OSS凭证对象
         try:
             if self._role is not None:
                 source = self._role.get_credentials()

@@ -44,6 +44,14 @@ from juya_admin_api.shared.ids import new_ulid  # noqa: E402
 def signed_post(
     http: httpx.Client, base: str, path: str, payload: dict, secret: bytes
 ) -> httpx.Response:
+    # 功能:发送带内部HMAC签名的本地生命周期验收请求
+    # 参数:
+    #     http: 发送本地生命周期验收HTTP请求的同步客户端
+    #     base: 内部验收接口的服务根地址
+    #     path: 待请求的内部接口路径
+    #     payload: 小程序请求体中的结构化业务字段
+    #     secret: 内部服务请求HMAC签名和验签的共享密钥
+    # 返回:上游HTTP响应对象
     body = json.dumps(payload, separators=(",", ":")).encode()
     timestamp = int(time.time())
     nonce = secrets.token_hex(16)
@@ -61,6 +69,11 @@ def signed_post(
 
 
 async def draft_fixtures(url: str, now: datetime) -> tuple[str, list[tuple[str, str, str]]]:
+    # 功能:在隔离数据库中创建待清理的草稿与媒体验收数据
+    # 参数:
+    #     url: 隔离数据库或本地验收服务的连接地址
+    #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+    # 返回:验收场景系列标识及草稿场景、修订与回收站标识列表
     engine = async_engine(url.replace("mysql+pymysql", "mysql+asyncmy"))
     sessions = create_session_factory(engine)
     store = ProductionStore(sessions, require_review=False)
@@ -94,6 +107,11 @@ async def draft_fixtures(url: str, now: datetime) -> tuple[str, list[tuple[str, 
 
 
 async def oss_fixtures(config: dict, keys: list[str]) -> AliyunOssProvider:
+    # 功能:创建本地生命周期验收使用的OSS对象
+    # 参数:
+    #     config: OSS生命周期验收使用的连接与凭证配置
+    #     keys: 本次OSS清理验收涉及的对象键列表
+    # 返回:OSS对象存储验收客户端
     values = {
         key[5:].lower(): value
         for key, value in config.items()
@@ -138,6 +156,10 @@ async def oss_fixtures(config: dict, keys: list[str]) -> AliyunOssProvider:
 
 
 def run() -> None:
+    # 功能:执行隔离环境的账号生命周期与跨域清理验收
+    # 参数:
+    #     无形参。
+    # 返回:无返回值。
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--execute", action="store_true", help="Create only isolated synthetic fixtures"
@@ -188,6 +210,11 @@ def run() -> None:
     checks = report["checks"]
 
     def task(name: str, queue: str):
+        # 功能:向指定Celery队列发送生命周期验收任务
+        # 参数:
+        #     name: 需要投递的Celery任务全名
+        #     queue: 验收任务投递到的Celery业务队列名称
+        # 返回:Celery异步任务句柄
         result = celery.send_task(name, queue=queue).get(timeout=30)
         if name in checks:
             previous = checks[name]
@@ -391,6 +418,10 @@ def run() -> None:
             )
 
         async def inspect_oss():
+            # 功能:检查验收对象的OSS清理结果
+            # 参数:
+            #     无形参。
+            # 返回:验收OSS对象是否仍存在的检查记录
             from juya_admin_api.shared.errors import AppError
 
             try:

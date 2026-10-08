@@ -29,11 +29,36 @@ class FavoriteRepository(Protocol):
         entry_stable_id: str,
         source: FavoriteSource,
         now: datetime,
-    ) -> FavoriteEntry: ...
+    ) -> FavoriteEntry:
+        # 功能:按标准化词条去重收藏并合并固定版本来源快照
+        # 参数:
+        #     self: 当前收藏与复习会话仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     entry_type: 收藏词条类别,区分单词与短语
+        #     normalized_key: 标准化后的收藏英文去重键
+        #     entry_stable_id: 跨内容修订保持稳定的词条标识
+        #     source: 收藏时固定的发布版本、定位和词条来源快照
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:收藏记录及固定版本来源快照
+        ...
 
-    async def get(self, user_id: str, favorite_id: str) -> FavoriteEntry | None: ...
+    async def get(self, user_id: str, favorite_id: str) -> FavoriteEntry | None:
+        # 功能:读取当前用户收藏及固定版本来源快照
+        # 参数:
+        #     self: 当前收藏与复习会话仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     favorite_id: 当前用户收藏记录的公开标识
+        # 返回:收藏记录及固定版本来源快照;不存在或无候选时返回None
+        ...
 
-    async def delete(self, user_id: str, favorite_id: str) -> None: ...
+    async def delete(self, user_id: str, favorite_id: str) -> None:
+        # 功能:删除当前用户收藏与关联来源
+        # 参数:
+        #     self: 当前收藏与复习会话仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     favorite_id: 当前用户收藏记录的公开标识
+        # 返回:无返回值。
+        ...
 
     async def create_review(
         self,
@@ -41,7 +66,16 @@ class FavoriteRepository(Protocol):
         card_ids: tuple[str, ...],
         idempotency_key: str,
         now: datetime,
-    ) -> ReviewSession: ...
+    ) -> ReviewSession:
+        # 功能:校验并固定用户选择的收藏卡片生成复习会话
+        # 参数:
+        #     self: 当前收藏与复习会话仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     card_ids: 本次复习选择的收藏公开标识序列
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:固定所选收藏卡片的复习会话
+        ...
 
     async def complete_review(
         self,
@@ -49,11 +83,24 @@ class FavoriteRepository(Protocol):
         review_id: str,
         idempotency_key: str,
         now: datetime,
-    ) -> ReviewCompletion: ...
+    ) -> ReviewCompletion:
+        # 功能:幂等完成复习并更新所选收藏的复习时间与打卡
+        # 参数:
+        #     self: 当前收藏与复习会话仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     review_id: 收藏复习会话的公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:复习完成状态与打卡日期
+        ...
 
 
 class InMemoryFavoriteRepository:
     def __init__(self) -> None:
+        # 功能:初始化收藏复习的InMemoryFavoriteRepository对象的状态存储
+        # 参数:
+        #     self: 当前收藏复习的InMemoryFavoriteRepository实例
+        # 返回:无返回值。
         self.favorites: dict[tuple[str, str, str], FavoriteEntry] = {}
         self.sources: dict[str, dict[tuple[str, str], FavoriteSource]] = {}
         self.reviews: dict[str, ReviewSession] = {}
@@ -70,6 +117,16 @@ class InMemoryFavoriteRepository:
         source: FavoriteSource,
         now: datetime,
     ) -> FavoriteEntry:
+        # 功能:按标准化词条去重收藏并合并固定版本来源快照
+        # 参数:
+        #     self: 当前收藏复习的InMemoryFavoriteRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     entry_type: 收藏词条类别,区分单词与短语
+        #     normalized_key: 标准化后的收藏英文去重键
+        #     entry_stable_id: 跨内容修订保持稳定的词条标识
+        #     source: 收藏时固定的发布版本、定位和词条来源快照
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:收藏记录及固定版本来源快照
         async with self._lock:
             key = (user_id, entry_type, normalized_key)
             current = self.favorites.get(key)
@@ -101,6 +158,12 @@ class InMemoryFavoriteRepository:
             return updated
 
     async def get(self, user_id: str, favorite_id: str) -> FavoriteEntry | None:
+        # 功能:读取当前用户收藏及固定版本来源快照
+        # 参数:
+        #     self: 当前收藏复习的InMemoryFavoriteRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     favorite_id: 当前用户收藏记录的公开标识
+        # 返回:收藏记录及固定版本来源快照;不存在或无候选时返回None
         return next(
             (
                 item
@@ -111,6 +174,12 @@ class InMemoryFavoriteRepository:
         )
 
     async def delete(self, user_id: str, favorite_id: str) -> None:
+        # 功能:删除当前用户收藏与关联来源
+        # 参数:
+        #     self: 当前收藏复习的InMemoryFavoriteRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     favorite_id: 当前用户收藏记录的公开标识
+        # 返回:无返回值。
         async with self._lock:
             keys = [
                 key
@@ -128,6 +197,14 @@ class InMemoryFavoriteRepository:
         idempotency_key: str,
         now: datetime,
     ) -> ReviewSession:
+        # 功能:校验并固定用户选择的收藏卡片生成复习会话
+        # 参数:
+        #     self: 当前收藏复习的InMemoryFavoriteRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     card_ids: 本次复习选择的收藏公开标识序列
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:固定所选收藏卡片的复习会话
         async with self._lock:
             existing_id = self.review_idempotency.get((user_id, idempotency_key))
             if existing_id is not None:
@@ -161,6 +238,14 @@ class InMemoryFavoriteRepository:
         idempotency_key: str,
         now: datetime,
     ) -> ReviewCompletion:
+        # 功能:幂等完成复习并更新所选收藏的复习时间与打卡
+        # 参数:
+        #     self: 当前收藏复习的InMemoryFavoriteRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     review_id: 收藏复习会话的公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:复习完成状态与打卡日期
         del idempotency_key
         async with self._lock:
             review = self.reviews.get(review_id)
@@ -186,12 +271,20 @@ class InMemoryFavoriteRepository:
 
 
 def _database_datetime(value: datetime) -> datetime:
+    # 功能:将时间转换为数据库保存的无时区UTC时间
+    # 参数:
+    #     value: 待转换时区的必填数据库或业务时间
+    # 返回:转换后的无时区UTC时间
     if value.tzinfo is None:
         return value
     return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def _utc_datetime(value: datetime | None) -> datetime | None:
+    # 功能:将数据库时间统一为带UTC时区的时间并保留空值
+    # 参数:
+    #     value: 待转换时区的数据库或业务时间;空值保留为空
+    # 返回:带UTC时区的时间;原值为空时返回None
     if value is None:
         return None
     if value.tzinfo is None:
@@ -201,6 +294,11 @@ def _utc_datetime(value: datetime | None) -> datetime | None:
 
 class SQLAlchemyFavoriteRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        # 功能:初始化SQL收藏与复习仓库并保存所需依赖与配置
+        # 参数:
+        #     self: 当前SQL收藏与复习仓库实例
+        #     session_factory: 创建数据库事务会话的异步工厂
+        # 返回:无返回值。
         self._session_factory = session_factory
 
     async def upsert(
@@ -212,6 +310,16 @@ class SQLAlchemyFavoriteRepository:
         source: FavoriteSource,
         now: datetime,
     ) -> FavoriteEntry:
+        # 功能:按标准化词条去重收藏并合并固定版本来源快照
+        # 参数:
+        #     self: 当前SQL收藏与复习仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     entry_type: 收藏词条类别,区分单词与短语
+        #     normalized_key: 标准化后的收藏英文去重键
+        #     entry_stable_id: 跨内容修订保持稳定的词条标识
+        #     source: 收藏时固定的发布版本、定位和词条来源快照
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:收藏记录及固定版本来源快照
         async with self._session_factory() as session, session.begin():
             internal_user_id = await self._lock_user(session, user_id)
             favorite_id = await session.scalar(
@@ -280,6 +388,12 @@ class SQLAlchemyFavoriteRepository:
             return favorite
 
     async def get(self, user_id: str, favorite_id: str) -> FavoriteEntry | None:
+        # 功能:读取当前用户收藏及固定版本来源快照
+        # 参数:
+        #     self: 当前SQL收藏与复习仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     favorite_id: 当前用户收藏记录的公开标识
+        # 返回:收藏记录及固定版本来源快照;不存在或无候选时返回None
         async with self._session_factory() as session:
             internal_id = await session.scalar(
                 text(
@@ -294,6 +408,12 @@ class SQLAlchemyFavoriteRepository:
             return await self._load_by_internal_id(session, int(internal_id), user_id)
 
     async def delete(self, user_id: str, favorite_id: str) -> None:
+        # 功能:删除当前用户收藏与关联来源
+        # 参数:
+        #     self: 当前SQL收藏与复习仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     favorite_id: 当前用户收藏记录的公开标识
+        # 返回:无返回值。
         async with self._session_factory() as session, session.begin():
             await self._lock_user(session, user_id)
             await session.execute(
@@ -312,6 +432,14 @@ class SQLAlchemyFavoriteRepository:
         idempotency_key: str,
         now: datetime,
     ) -> ReviewSession:
+        # 功能:校验并固定用户选择的收藏卡片生成复习会话
+        # 参数:
+        #     self: 当前SQL收藏与复习仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     card_ids: 本次复习选择的收藏公开标识序列
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:固定所选收藏卡片的复习会话
         async with self._session_factory() as session, session.begin():
             internal_user_id = await self._lock_user(session, user_id)
             row = (
@@ -363,6 +491,14 @@ class SQLAlchemyFavoriteRepository:
         idempotency_key: str,
         now: datetime,
     ) -> ReviewCompletion:
+        # 功能:幂等完成复习并更新所选收藏的复习时间与打卡
+        # 参数:
+        #     self: 当前SQL收藏与复习仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     review_id: 收藏复习会话的公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:复习完成状态与打卡日期
         del idempotency_key
         learning_day = beijing_learning_date(now)
         async with self._session_factory() as session, session.begin():
@@ -432,6 +568,13 @@ class SQLAlchemyFavoriteRepository:
     async def list_favorites(
         self, user_id: str, *, after_id: str | None = None, limit: int = 50
     ) -> list[FavoriteEntry]:
+        # 功能:按游标分页查询当前用户收藏
+        # 参数:
+        #     self: 当前SQL收藏与复习仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     after_id: 上一页最后一条记录的公开标识
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:收藏记录及固定版本来源快照集合
         cursor = "" if after_id is None else after_id
         async with self._session_factory() as session:
             rows = cast(
@@ -459,6 +602,12 @@ class SQLAlchemyFavoriteRepository:
 
     @staticmethod
     async def _validate_cards(session: AsyncSession, user_id: int, cards: tuple[str, ...]) -> None:
+        # 功能:校验复习卡片存在且全部属于发起用户
+        # 参数:
+        #     session: 异步数据库会话
+        #     user_id: 业务数据库中的用户内部数值主键
+        #     cards: 待核验归属或固定到复习会话的收藏标识集合
+        # 返回:无返回值。
         if not cards or len(set(cards)) != len(cards):
             raise AppError("REVIEW_CARDS_INVALID", "复习卡片集合无效", 422)
         rows: Any = (
@@ -479,6 +628,11 @@ class SQLAlchemyFavoriteRepository:
 
     @staticmethod
     async def _lock_user(session: AsyncSession, public_id: str) -> int:
+        # 功能:锁定用户账号行并取得数据库内部主键
+        # 参数:
+        #     session: 异步数据库会话
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:已锁定用户账号的数据库内部主键
         internal_id = await session.scalar(
             text("SELECT id FROM user_account WHERE public_id = :public_id FOR UPDATE"),
             {"public_id": public_id},
@@ -491,6 +645,12 @@ class SQLAlchemyFavoriteRepository:
     async def _load_by_internal_id(
         session: AsyncSession, internal_id: int, public_user_id: str
     ) -> FavoriteEntry | None:
+        # 功能:读取收藏主记录及其固定版本来源快照
+        # 参数:
+        #     session: 异步数据库会话
+        #     internal_id: 数据库记录的内部数值主键
+        #     public_user_id: 收藏所属用户的公开标识
+        # 返回:收藏记录及固定版本来源快照;不存在或无候选时返回None
         row = (
             (
                 await session.execute(
@@ -549,6 +709,11 @@ class SQLAlchemyFavoriteRepository:
 
     @staticmethod
     def _review_from_row(row: RowMapping, user_id: str) -> ReviewSession:
+        # 功能:将复习数据库行转换为固定卡片的复习会话
+        # 参数:
+        #     row: 查询返回的收藏复习数据库字段映射
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:固定所选收藏卡片的复习会话
         started_at = _utc_datetime(row["started_at"])
         if started_at is None:
             raise RuntimeError("Review timestamp cannot be null")

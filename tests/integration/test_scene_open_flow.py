@@ -11,9 +11,17 @@ NOW = datetime(2026, 9, 28, 21, 30, tzinfo=UTC)
 
 @pytest.mark.asyncio
 async def test_local_open_history_is_written_only_after_authorized_scene_response() -> None:
+    # 功能:验证本地打开历史仅在场景授权响应成功后写入
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     mode = "success"
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        # 功能:模拟HTTP上游响应以验证本地打开历史仅在场景授权响应成功后写入
+        # 参数:
+        #     request: HTTP测试或上游请求对象
+        # 返回:上游HTTP响应对象
         if mode == "failure":
             raise httpx.ConnectError("admin unavailable", request=request)
         return httpx.Response(
@@ -33,6 +41,10 @@ async def test_local_open_history_is_written_only_after_authorized_scene_respons
         )
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://admin-api")
+    # 匿名函数: clock测试时钟返回固定操作时间以稳定签名与有效期断言
+    # 参数:
+    #     无形参。
+    # 返回: 测试预设的带UTC时区时间
     client = AdminApiClient(http, secret=b"s" * 32, clock=lambda: NOW)
     history = InMemoryOpenHistory()
     service = AccessService(client, history)

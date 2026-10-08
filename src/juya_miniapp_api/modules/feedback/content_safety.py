@@ -13,6 +13,10 @@ _BLOCKED_PATTERNS = (
 
 
 def ensure_safe_feedback(value: str) -> None:
+    # 功能:校验反馈文本并拒绝敏感联系方式、链接和交易内容
+    # 参数:
+    #     value: 待检查敏感联系方式、链接和交易内容的反馈文本
+    # 返回:无返回值。
     if any(pattern.search(value) for pattern in _BLOCKED_PATTERNS):
         raise AppError(
             "FEEDBACK_CONTENT_BLOCKED",

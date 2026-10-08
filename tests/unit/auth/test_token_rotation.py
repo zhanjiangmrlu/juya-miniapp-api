@@ -14,10 +14,19 @@ NOW = datetime(2026, 9, 28, 18, 0, tzinfo=UTC)
 
 class FakeWechatProvider:
     async def exchange_code(self, code: str) -> WechatIdentity:
+        # 功能:在测试中使用微信临时登录码换取应用身份与openid
+        # 参数:
+        #     self: 当前登录会话的FakeWechatProvider实例
+        #     code: 微信客户端取得的一次性登录码
+        # 返回:微信应用标识与openid身份
         return WechatIdentity(app_id="wx-app", openid=f"openid-{code}")
 
 
 def make_service() -> tuple[SessionService, InMemoryAuthRepository, JwtService]:
+    # 功能:在测试中创建业务服务及其内存仓库测试依赖
+    # 参数:
+    #     无形参。
+    # 返回:微信登录与凭证轮换服务集合
     repository = InMemoryAuthRepository()
     jwt = JwtService(b"j" * 32, kid="miniapp-key-1")
     return (
@@ -34,6 +43,10 @@ def make_service() -> tuple[SessionService, InMemoryAuthRepository, JwtService]:
 
 @pytest.mark.asyncio
 async def test_access_claims_and_refresh_lifetimes() -> None:
+    # 功能:验证访问声明与刷新会话有效期符合契约
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     service, _repository, jwt = make_service()
 
     session = await service.login_with_wechat("code-1", "iphone", NOW)
@@ -49,6 +62,10 @@ async def test_access_claims_and_refresh_lifetimes() -> None:
 
 @pytest.mark.asyncio
 async def test_refresh_rotates_and_replay_revokes_session_family() -> None:
+    # 功能:验证刷新凭证轮换且重放撤销会话族
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     service, _repository, _jwt = make_service()
     session = await service.login_with_wechat("code-1", "iphone", NOW)
 
@@ -67,6 +84,10 @@ async def test_refresh_rotates_and_replay_revokes_session_family() -> None:
 
 @pytest.mark.asyncio
 async def test_logout_and_revoke_all_invalidate_refresh_tokens() -> None:
+    # 功能:验证退出和撤销全部会话后刷新凭证失效
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     service, _repository, _jwt = make_service()
     first = await service.login_with_wechat("code-1", "iphone", NOW)
     second = await service.login_with_wechat("code-1", "ipad", NOW)
@@ -84,6 +105,10 @@ async def test_logout_and_revoke_all_invalidate_refresh_tokens() -> None:
 
 @pytest.mark.asyncio
 async def test_deletion_pending_status_is_returned_without_identity_data() -> None:
+    # 功能:验证登录返回注销等待状态且不暴露微信身份
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     service, repository, _jwt = make_service()
     repository.next_user_status = "DELETION_PENDING"
 
@@ -96,6 +121,10 @@ async def test_deletion_pending_status_is_returned_without_identity_data() -> No
 
 @pytest.mark.asyncio
 async def test_deleting_account_cannot_create_a_new_session() -> None:
+    # 功能:验证注销中的账号无法创建新会话
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     service, repository, _jwt = make_service()
     repository.next_user_status = "DELETING"
 

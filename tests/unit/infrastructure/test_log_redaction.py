@@ -7,6 +7,10 @@ from juya_miniapp_api.infrastructure.observability.logging import (
 
 
 def test_redaction_removes_sensitive_keys_and_signed_query_values() -> None:
+    # 功能:验证日志脱敏移除敏感键和签名查询值
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     value = {
         "access_token": "secret-token",
         "openid": "openid-value",
@@ -27,6 +31,10 @@ def test_redaction_removes_sensitive_keys_and_signed_query_values() -> None:
 
 
 def test_logging_filter_redacts_message_arguments() -> None:
+    # 功能:验证日志过滤器遮蔽格式化参数中的敏感内容
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     record = logging.LogRecord(
         "test",
         logging.INFO,
@@ -43,6 +51,10 @@ def test_logging_filter_redacts_message_arguments() -> None:
 
 
 def test_nested_sdk_security_token_spelling_is_redacted() -> None:
+    # 功能:验证嵌套SDK安全令牌字段的不同拼写均被遮蔽
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     record = logging.LogRecord(
         "application",
         logging.INFO,

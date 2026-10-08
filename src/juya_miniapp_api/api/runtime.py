@@ -70,6 +70,11 @@ from juya_miniapp_api.shared.errors import AppError
 
 
 def _required(value: str | SecretStr | None, name: str) -> str:
+    # 功能:读取必需的配置值并拒绝缺失或空值
+    # 参数:
+    #     value: 必需配置的原始字符串或SecretStr封装值
+    #     name: 配置项名称,缺失时写入启动错误说明
+    # 返回:读取出的非空配置字符串
     if value is None:
         raise RuntimeError(f"Missing required setting: {name}")
     resolved = value.get_secret_value() if isinstance(value, SecretStr) else value
@@ -86,12 +91,24 @@ class RuntimeResources:
         clients: tuple[httpx.AsyncClient, ...],
         readiness: Callable[[], Awaitable[Mapping[str, bool]]],
     ) -> None:
+        # 功能:初始化需要在应用退出时释放的运行资源并保存所需依赖与配置
+        # 参数:
+        #     self: 当前需要在应用退出时释放的运行资源实例
+        #     engine: 异步SQLAlchemy数据库连接引擎
+        #     redis: 提供缓存、原子脚本或随机数防重放操作的Redis客户端
+        #     clients: 应用关闭时需要释放的HTTP客户端集合
+        #     readiness: 检查数据库、Redis与应用配置的异步就绪回调
+        # 返回:无返回值。
         self.engine = engine
         self.redis = redis
         self.clients = clients
         self.readiness = readiness
 
     async def close(self) -> None:
+        # 功能:释放数据库、Redis与HTTP客户端连接资源
+        # 参数:
+        #     self: 当前需要在应用退出时释放的运行资源实例
+        # 返回:无返回值。
         for client in self.clients:
             await client.aclose()
         await self.redis.aclose()
@@ -99,6 +116,11 @@ class RuntimeResources:
 
 
 def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResources:
+    # 功能:创建真实运行依赖并安装公开与内部业务路由
+    # 参数:
+    #     app: 待安装路由、中间件或异常处理器的FastAPI应用
+    #     settings: 应用环境、数据库、Redis和外部服务运行配置
+    # 返回:需要在应用退出时释放的运行资源
     settings.validate_oss_configuration()
     database_url = _required(settings.database_url, "database_url")
     redis_url = _required(settings.redis_url, "redis_url")
@@ -135,6 +157,10 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
     async def current_user(
         authorization: Annotated[str | None, Header(alias="Authorization")] = None,
     ) -> str:
+        # 功能:校验访问凭证与会话状态并取得当前用户公开标识
+        # 参数:
+        #     authorization: 客户端Authorization头中的Bearer访问凭证
+        # 返回:通过鉴权的用户公开标识
         if not authorization or not authorization.startswith("Bearer "):
             raise AppError("ACCESS_TOKEN_REQUIRED", "请先登录", 401)
         claims = jwt.decode_access_token(
@@ -152,12 +178,20 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
     hmac_secret = SecretStr(_required(settings.internal_hmac_secret, "internal_hmac_secret"))
 
     async def current_service(request: Request) -> ServicePrincipal:
+        # 功能:校验内部请求签名并取得调用服务身份
+        # 参数:
+        #     request: FastAPI请求对象
+        # 返回:已验证的内部调用服务身份
         return await verify_request_signature(request, hmac_secret, nonce_store, datetime.now(UTC))
 
     @app.get("/internal/metrics", include_in_schema=False)
     async def metrics(
         _principal: Annotated[ServicePrincipal, Depends(current_service)],
     ) -> Response:
+        # 功能:返回内部鉴权保护的Prometheus指标
+        # 参数:
+        #     _principal: 已通过内部签名校验的调用服务身份
+        # 返回:HTTP响应对象
         return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
     admin = AdminApiClient(
@@ -266,6 +300,10 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         app.include_router(router)
 
     async def readiness() -> Mapping[str, bool]:
+        # 功能:检查数据库版本、Redis和必需应用配置的就绪状态
+        # 参数:
+        #     无形参。
+        # 返回:依赖名称到就绪状态的映射
         try:
             checks = dict(await check_minimum_schema_version(sessions, 16))
         except Exception:

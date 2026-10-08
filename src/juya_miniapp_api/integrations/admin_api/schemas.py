@@ -65,6 +65,10 @@ class SceneOpenResult(BaseModel):
 
     @model_validator(mode="after")
     def validate_access_shape(self) -> "SceneOpenResult":
+        # 功能:校验不同访问级别的场景响应字段是否符合契约
+        # 参数:
+        #     self: 当前访问级别与已发布场景内容实例
+        # 返回:访问级别与已发布场景内容
         if self.scene is not None:
             if self.access == "PREVIEW" and not isinstance(self.scene, PreviewScene):
                 raise ValueError("Preview access cannot contain published content")

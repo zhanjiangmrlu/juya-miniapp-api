@@ -10,6 +10,10 @@ from juya_miniapp_api.main import create_app
 
 
 def runtime_settings() -> Settings:
+    # 功能:在测试中构造端到端测试的真实路由运行配置
+    # 参数:
+    #     无形参。
+    # 返回:应用运行配置
     key = base64.urlsafe_b64encode(b"0" * 32).decode()
     return Settings(
         environment="test",
@@ -32,6 +36,10 @@ def runtime_settings() -> Settings:
 
 
 def test_oss_upload_openapi_describes_v4_fields() -> None:
+    # 功能:验证上传OpenAPI包含OSS V4字段说明
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     app = create_app(runtime_settings())
     schema = app.openapi()
     response = schema["paths"]["/api/v1/feedback/uploads"]["post"]["responses"]["200"]
@@ -42,6 +50,10 @@ def test_oss_upload_openapi_describes_v4_fields() -> None:
 
 
 def test_openapi_snapshot_exposes_typed_published_scene_and_versioned_resources() -> None:
+    # 功能:验证OpenAPI快照包含发布场景类型与版本资源契约
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     schema = create_app(runtime_settings()).openapi()
     snapshot = Path(__file__).parents[2] / "docs/contracts/miniapp-api.json"
     assert json.loads(snapshot.read_text(encoding="utf-8")) == schema
@@ -58,6 +70,10 @@ def test_openapi_snapshot_exposes_typed_published_scene_and_versioned_resources(
 
 @pytest.mark.asyncio
 async def test_runtime_exposes_the_complete_public_and_internal_route_manifest() -> None:
+    # 功能:验证运行应用包含完整的公开与内部路由清单
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     app = create_app(runtime_settings())
     expected = {
         ("POST", "/api/v1/session/wechat"),

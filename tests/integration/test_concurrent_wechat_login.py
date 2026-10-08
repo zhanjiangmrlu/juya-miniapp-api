@@ -20,11 +20,20 @@ NOW = datetime(2026, 9, 28, 18, 0, tzinfo=UTC)
 
 class SameIdentityWechatProvider:
     async def exchange_code(self, code: str) -> WechatIdentity:
+        # 功能:在测试中使用微信临时登录码换取应用身份与openid
+        # 参数:
+        #     self: 当前小程序的SameIdentityWechatProvider实例
+        #     code: 微信客户端取得的一次性登录码
+        # 返回:微信应用标识与openid身份
         del code
         return WechatIdentity(app_id="wx-concurrency-test", openid="same-openid")
 
 
 def _database_url() -> str:
+    # 功能:在测试中读取集成测试的隔离数据库连接配置
+    # 参数:
+    #     无形参。
+    # 返回:集成测试数据库连接地址
     url = os.environ.get("JUYA_TEST_DATABASE_URL")
     if not url:
         pytest.skip("JUYA_TEST_DATABASE_URL is required for MySQL integration tests")
@@ -33,6 +42,10 @@ def _database_url() -> str:
 
 @pytest.mark.asyncio
 async def test_same_openid_concurrent_login_creates_one_user_and_identity() -> None:
+    # 功能:验证同一openid并发登录只创建一个账号与身份绑定
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     engine = create_engine(_database_url())
     factory = create_session_factory(engine)
     try:

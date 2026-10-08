@@ -16,6 +16,10 @@ NOW = datetime(2026, 9, 28, 20, 0, tzinfo=UTC)
 
 
 def _database_url() -> str:
+    # 功能:在测试中读取集成测试的隔离数据库连接配置
+    # 参数:
+    #     无形参。
+    # 返回:集成测试数据库连接地址
     url = os.environ.get("JUYA_TEST_DATABASE_URL")
     if not url:
         pytest.skip("JUYA_TEST_DATABASE_URL is required for MySQL integration tests")
@@ -24,6 +28,10 @@ def _database_url() -> str:
 
 @pytest.mark.asyncio
 async def test_concurrent_progress_and_completion_are_monotonic_and_idempotent() -> None:
+    # 功能:验证并发进度保持单调且学习完成保持幂等
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     engine = create_engine(_database_url())
     factory = create_session_factory(engine)
     public_id = new_ulid(NOW)

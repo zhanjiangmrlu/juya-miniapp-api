@@ -21,6 +21,15 @@ async def append_contact_event(
     occurred_at: datetime,
     payload: Mapping[str, object] | None = None,
 ) -> bool:
+    # 功能:写入联系方式转化链路的匿名统计事件
+    # 参数:
+    #     session: 异步数据库会话
+    #     event_key: 统计事件唯一键,重复写入时用于去重
+    #     event_type: 统计或发件箱事件的业务类别
+    #     user_id: 业务数据库中的用户内部数值主键
+    #     occurred_at: 业务统计事件实际发生的时间
+    #     payload: 统计事件的白名单业务字段,不包含敏感用户信息
+    # 返回:是否新写入联系方式统计事件
     body = dict(payload or {})
     cohort = body.pop("contact_cohort", None)
     if cohort is not None and (

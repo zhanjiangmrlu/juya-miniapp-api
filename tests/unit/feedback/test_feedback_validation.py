@@ -11,15 +11,28 @@ NOW = datetime(2026, 9, 28, 8, 0, tzinfo=UTC)
 
 class CapturingFeedbackClient:
     def __init__(self) -> None:
+        # 功能:初始化用户反馈的CapturingFeedbackClient对象的状态存储
+        # 参数:
+        #     self: 当前用户反馈的CapturingFeedbackClient实例
+        # 返回:无返回值。
         self.created: list[dict[str, object]] = []
 
     async def create_feedback(self, **payload: object) -> dict[str, object]:
+        # 功能:在测试中提交当前用户反馈及来源和截图对象键
+        # 参数:
+        #     self: 当前用户反馈的CapturingFeedbackClient实例
+        #     payload: 用户反馈请求体中的结构化业务字段
+        # 返回:新建反馈记录及其处理状态
         self.created.append(payload)
         return {"id": "feedback-1", "status": "PENDING", "created_at": NOW.isoformat()}
 
 
 @pytest.mark.asyncio
 async def test_feedback_only_accepts_one_screenshot_owned_by_current_user() -> None:
+    # 功能:验证反馈只接受当前用户拥有的一张截图
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     client = CapturingFeedbackClient()
     service = FeedbackService(client)
 
@@ -69,6 +82,10 @@ async def test_feedback_only_accepts_one_screenshot_owned_by_current_user() -> N
 
 @pytest.mark.asyncio
 async def test_feedback_description_is_trimmed_and_limited_to_300_characters() -> None:
+    # 功能:验证反馈说明去除首尾空白且限制为三百字
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     service = FeedbackService(CapturingFeedbackClient())
 
     with pytest.raises(AppError) as empty:
@@ -93,6 +110,10 @@ async def test_feedback_description_is_trimmed_and_limited_to_300_characters() -
 async def test_feedback_rejects_sensitive_contact_url_and_transaction_content(
     description: str,
 ) -> None:
+    # 功能:验证反馈拒绝敏感联系方式、链接与交易内容
+    # 参数:
+    #     description: 用户提交的反馈问题说明
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     service = FeedbackService(CapturingFeedbackClient(), require_review=True)
 
     with pytest.raises(AppError) as blocked:
@@ -103,6 +124,10 @@ async def test_feedback_rejects_sensitive_contact_url_and_transaction_content(
 
 @pytest.mark.asyncio
 async def test_review_disabled_keeps_feedback_length_and_screenshot_ownership_validation() -> None:
+    # 功能:验证关闭内容审核仍保留反馈长度和截图归属校验
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     service = FeedbackService(CapturingFeedbackClient())
     result = await service.create(
         "user-1", "OTHER", "详情访问 https://lesson.example.com", {}, [], "review-off"
@@ -119,6 +144,14 @@ async def test_review_disabled_keeps_feedback_length_and_screenshot_ownership_va
 
 
 def test_feedback_upload_credential_is_short_lived_and_user_scoped() -> None:
+    # 功能:验证反馈上传凭证短期有效且绑定用户
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
+    # 匿名函数: clock测试时钟返回固定操作时间以稳定签名与有效期断言
+    # 参数:
+    #     无形参。
+    # 返回: 测试预设的带UTC时区时间
     uploads = OssUploadService(
         endpoint="oss-cn-test.aliyuncs.com",
         bucket="private-bucket",

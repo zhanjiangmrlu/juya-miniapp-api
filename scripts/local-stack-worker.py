@@ -15,6 +15,10 @@ ROLES = {
 
 
 def inspect_container(name: str) -> dict:
+    # 功能:读取本地Docker容器配置与运行信息
+    # 参数:
+    #     name: 需要检查的Docker容器名称
+    # 返回:Docker容器配置、环境变量与运行状态
     result = subprocess.run(["docker", "inspect", name], capture_output=True, check=False)
     if result.returncode:
         raise RuntimeError(f"Container unavailable: {name}")
@@ -22,10 +26,19 @@ def inspect_container(name: str) -> dict:
 
 
 def environment(info: dict) -> dict[str, str]:
+    # 功能:从容器配置提取环境变量映射
+    # 参数:
+    #     info: Docker inspect返回的容器配置与运行信息
+    # 返回:容器环境变量名称到字符串值的映射
     return dict(item.split("=", 1) for item in info["Config"]["Env"] if "=" in item)
 
 
 def validate_stack(admin: dict[str, str], mini: dict[str, str]) -> None:
+    # 功能:校验管理端与小程序隔离数据库和内部签名配置一致
+    # 参数:
+    #     admin: 管理端容器导出的验收环境变量
+    #     mini: 小程序容器导出的验收环境变量
+    # 返回:无返回值。
     for env in (admin, mini):
         if env.get("JUYA_ENVIRONMENT") not in {"local", "test"}:
             raise ValueError("Only local/test stack permitted")
@@ -48,6 +61,12 @@ def validate_stack(admin: dict[str, str], mini: dict[str, str]) -> None:
 
 
 def command(role: str, info: dict, root: Path) -> tuple[list[str], dict[str, str]]:
+    # 功能:按worker角色生成本地启动命令与环境变量
+    # 参数:
+    #     role: 本地worker启动角色,决定任务模块与队列
+    #     info: Docker inspect返回的容器配置与运行信息
+    #     root: 当前后端项目的绝对工作目录
+    # 返回:worker启动参数列表及其进程环境变量
     _, target, repo = ROLES[role]
     child = environment(info)
     if role == "mini-worker":
@@ -80,6 +99,10 @@ def command(role: str, info: dict, root: Path) -> tuple[list[str], dict[str, str
 
 
 def main() -> None:
+    # 功能:校验隔离容器配置并启动指定角色worker
+    # 参数:
+    #     无形参。
+    # 返回:无返回值。
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--role", choices=ROLES, required=True)
     parser.add_argument("--start", action="store_true", help="Root-only explicit service creation")

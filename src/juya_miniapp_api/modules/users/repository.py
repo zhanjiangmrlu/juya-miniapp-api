@@ -11,8 +11,20 @@ from juya_miniapp_api.shared.errors import AppError
 
 
 class UserRepository(Protocol):
-    async def pending_deletion(self, public_id: str) -> dict[str, object] | None: ...
-    async def get_profile(self, public_id: str) -> UserProfile | None: ...
+    async def pending_deletion(self, public_id: str) -> dict[str, object] | None:
+        # 功能:查询用户等待生效或正在执行的注销申请
+        # 参数:
+        #     self: 当前用户资料存储仓库实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:注销申请公开标识、状态与时间字段;无申请时为None
+        ...
+    async def get_profile(self, public_id: str) -> UserProfile | None:
+        # 功能:读取用户账号与昵称头像资料
+        # 参数:
+        #     self: 当前用户资料存储仓库实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:用户账号资料与昵称头像;不存在或无候选时返回None
+        ...
 
     async def update_profile(
         self,
@@ -20,18 +32,44 @@ class UserRepository(Protocol):
         nickname: str | None,
         avatar_object_key: str | None,
         now: datetime,
-    ) -> UserProfile: ...
+    ) -> UserProfile:
+        # 功能:保存用户昵称与头像对象键并读取更新后的资料
+        # 参数:
+        #     self: 当前用户资料存储仓库实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        #     nickname: 待保存的用户昵称; None表示未提供或清空昵称
+        #     avatar_object_key: 用户头像在OSS中的对象键
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:用户账号资料与昵称头像
+        ...
 
     async def search_profiles(
         self, *, juya_number: str | None, nickname: str | None, limit: int
-    ) -> list[UserProfile]: ...
+    ) -> list[UserProfile]:
+        # 功能:按句芽编号或昵称查询用户资料
+        # 参数:
+        #     self: 当前用户资料存储仓库实例
+        #     juya_number: 用户对外展示的句芽编号,亦可作为搜索条件
+        #     nickname: 需要匹配的昵称搜索文本; None表示不按昵称筛选
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:用户账号资料与昵称头像集合
+        ...
 
 
 class InMemoryUserRepository:
     async def pending_deletion(self, public_id: str) -> dict[str, object] | None:
+        # 功能:查询用户等待生效或正在执行的注销申请
+        # 参数:
+        #     self: 当前用户资料的InMemoryUserRepository实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:注销申请公开标识、状态与时间字段;无申请时为None
         return None
 
     def __init__(self) -> None:
+        # 功能:初始化用户资料的InMemoryUserRepository对象的状态存储
+        # 参数:
+        #     self: 当前用户资料的InMemoryUserRepository实例
+        # 返回:无返回值。
         self.profiles: dict[str, UserProfile] = {}
 
     def add(
@@ -43,11 +81,25 @@ class InMemoryUserRepository:
         avatar_object_key: str | None = None,
         status: str = "ACTIVE",
     ) -> None:
+        # 功能:向内存用户仓库添加初始账号资料
+        # 参数:
+        #     self: 当前用户资料的InMemoryUserRepository实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        #     juya_number: 用户对外展示的句芽编号,亦可作为搜索条件
+        #     nickname: 待保存的用户昵称; None表示未提供或清空昵称
+        #     avatar_object_key: 用户头像在OSS中的对象键
+        #     status: 初始化用户账号时保存的账号业务状态
+        # 返回:无返回值。
         self.profiles[public_id] = UserProfile(
             public_id, juya_number, status, nickname, avatar_object_key
         )
 
     async def get_profile(self, public_id: str) -> UserProfile | None:
+        # 功能:读取用户账号与昵称头像资料
+        # 参数:
+        #     self: 当前用户资料的InMemoryUserRepository实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:用户账号资料与昵称头像;不存在或无候选时返回None
         return self.profiles.get(public_id)
 
     async def update_profile(
@@ -57,6 +109,14 @@ class InMemoryUserRepository:
         avatar_object_key: str | None,
         now: datetime,
     ) -> UserProfile:
+        # 功能:保存用户昵称与头像对象键并读取更新后的资料
+        # 参数:
+        #     self: 当前用户资料的InMemoryUserRepository实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        #     nickname: 待保存的用户昵称; None表示未提供或清空昵称
+        #     avatar_object_key: 用户头像在OSS中的对象键
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:用户账号资料与昵称头像
         del now
         current = self.profiles.get(public_id)
         if current is None:
@@ -76,6 +136,13 @@ class InMemoryUserRepository:
     async def search_profiles(
         self, *, juya_number: str | None, nickname: str | None, limit: int
     ) -> list[UserProfile]:
+        # 功能:按句芽编号或昵称查询用户资料
+        # 参数:
+        #     self: 当前用户资料的InMemoryUserRepository实例
+        #     juya_number: 用户对外展示的句芽编号,亦可作为搜索条件
+        #     nickname: 需要匹配的昵称搜索文本; None表示不按昵称筛选
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:用户账号资料与昵称头像集合
         profiles = list(self.profiles.values())
         if juya_number:
             profiles = [item for item in profiles if item.juya_number.startswith(juya_number)]
@@ -85,6 +152,10 @@ class InMemoryUserRepository:
 
 
 def _utc(value: datetime | None) -> datetime | None:
+    # 功能:将数据库时间统一为带UTC时区的时间
+    # 参数:
+    #     value: 待转换时区的数据库或业务时间;空值保留为空
+    # 返回:带UTC时区的时间;原值为空时返回None
     if value is None:
         return None
     if value.tzinfo is None:
@@ -94,6 +165,11 @@ def _utc(value: datetime | None) -> datetime | None:
 
 class SQLAlchemyUserRepository:
     async def pending_deletion(self, public_id: str) -> dict[str, object] | None:
+        # 功能:查询用户等待生效或正在执行的注销申请
+        # 参数:
+        #     self: 当前用户资料的SQLAlchemyUserRepository实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:注销申请公开标识、状态与时间字段;无申请时为None
         async with self._session_factory() as session:
             row = (
                 (
@@ -112,6 +188,11 @@ class SQLAlchemyUserRepository:
         return dict(row) if row else None
 
     async def learning_achievements(self, public_id: str) -> dict[str, int]:
+        # 功能:统计用户已完成场景、连续学习天数与单词短语收藏数量
+        # 参数:
+        #     self: 当前用户资料的SQLAlchemyUserRepository实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:已完成场景数、连续和累计学习天数、单词与短语收藏数
         async with self._session_factory() as session:
             completed = await session.scalar(
                 text(
@@ -160,6 +241,11 @@ class SQLAlchemyUserRepository:
         }
 
     async def count_open_completions(self, public_id: str) -> int:
+        # 功能:统计用户去重后的开放场景完成数量
+        # 参数:
+        #     self: 当前用户资料的SQLAlchemyUserRepository实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:去重后的开放场景完成数量
         async with self._session_factory() as session:
             count = await session.scalar(
                 text(
@@ -174,9 +260,19 @@ class SQLAlchemyUserRepository:
             return int(count or 0)
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        # 功能:初始化用户资料的SQLAlchemyUserRepository对象并保存所需依赖与配置
+        # 参数:
+        #     self: 当前用户资料的SQLAlchemyUserRepository实例
+        #     session_factory: 创建数据库事务会话的异步工厂
+        # 返回:无返回值。
         self._session_factory = session_factory
 
     async def get_profile(self, public_id: str) -> UserProfile | None:
+        # 功能:读取用户账号与昵称头像资料
+        # 参数:
+        #     self: 当前用户资料的SQLAlchemyUserRepository实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:用户账号资料与昵称头像;不存在或无候选时返回None
         async with self._session_factory() as session:
             return await self._load(session, public_id)
 
@@ -187,6 +283,14 @@ class SQLAlchemyUserRepository:
         avatar_object_key: str | None,
         now: datetime,
     ) -> UserProfile:
+        # 功能:保存用户昵称与头像对象键并读取更新后的资料
+        # 参数:
+        #     self: 当前用户资料的SQLAlchemyUserRepository实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        #     nickname: 待保存的用户昵称; None表示未提供或清空昵称
+        #     avatar_object_key: 用户头像在OSS中的对象键
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:用户账号资料与昵称头像
         database_now = now.astimezone(UTC).replace(tzinfo=None) if now.tzinfo else now
         async with self._session_factory() as session, session.begin():
             await session.execute(
@@ -210,6 +314,13 @@ class SQLAlchemyUserRepository:
     async def search_profiles(
         self, *, juya_number: str | None, nickname: str | None, limit: int
     ) -> list[UserProfile]:
+        # 功能:按句芽编号或昵称查询用户资料
+        # 参数:
+        #     self: 当前用户资料的SQLAlchemyUserRepository实例
+        #     juya_number: 用户对外展示的句芽编号,亦可作为搜索条件
+        #     nickname: 需要匹配的昵称搜索文本; None表示不按昵称筛选
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:用户账号资料与昵称头像集合
         conditions: list[str] = []
         parameters: dict[str, object] = {"limit": limit}
         if juya_number:
@@ -240,6 +351,12 @@ class SQLAlchemyUserRepository:
 
     @classmethod
     async def _load(cls, session: AsyncSession, public_id: str) -> UserProfile | None:
+        # 功能:在当前数据库会话内读取用户资料
+        # 参数:
+        #     cls: 当前SQLAlchemyUserRepository类型,调用类级别的记录转换方法
+        #     session: 异步数据库会话
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:用户账号资料与昵称头像;不存在或无候选时返回None
         row = (
             (
                 await session.execute(
@@ -259,6 +376,10 @@ class SQLAlchemyUserRepository:
 
     @staticmethod
     def _from_row(mapping: RowMapping) -> UserProfile:
+        # 功能:将数据库查询行转换为用户账号资料与昵称头像
+        # 参数:
+        #     mapping: 查询返回的用户资料数据库字段映射
+        # 返回:用户账号资料与昵称头像
         return UserProfile(
             mapping["public_id"],
             mapping["juya_number"],

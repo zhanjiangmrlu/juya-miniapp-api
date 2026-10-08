@@ -33,6 +33,10 @@ class LogoutRequest(BaseModel):
 
 
 def _response(tokens: SessionTokens) -> dict[str, object]:
+    # 功能:组装对客户端返回的登录会话凭证响应
+    # 参数:
+    #     tokens: 已签发的登录会话与访问刷新凭证集合
+    # 返回:用户公开资料、会话标识、访问刷新凭证及注销等待标记
     return {
         "access_token": tokens.access_token,
         "refresh_token": tokens.refresh_token,
@@ -47,18 +51,34 @@ def _response(tokens: SessionTokens) -> dict[str, object]:
     }
 
 
+# 匿名函数: clock默认时钟在调用时读取当前UTC时间
+# 参数:
+#     无形参。
+# 返回: 带UTC时区的当前时间
 def create_auth_router(
     service: SessionService,
     *,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     rate_limiter: RateLimiter | None = None,
 ) -> APIRouter:
+    # 功能:创建并绑定登录会话路由与业务依赖
+    # 参数:
+    #     service: 微信登录与凭证轮换服务,承载登录会话业务操作
+    #     clock: 提供当前时间的可替换时钟回调
+    #     rate_limiter: 按主体和业务范围控制请求频率的限流服务
+    # 返回:包含业务端点的FastAPI路由器
     router = APIRouter(prefix="/api/v1/session", tags=["session"])
 
     @router.post("/wechat")
     async def login(
         payload: WechatLoginRequest, request: Request, response: Response
     ) -> dict[str, object]:
+        # 功能:接收微信登录请求并签发会话凭证
+        # 参数:
+        #     payload: 已校验的微信登录码与设备信息
+        #     request: FastAPI请求对象
+        #     response: HTTP响应对象
+        # 返回:微信登录后的用户资料、会话标识与访问刷新凭证
         now = clock()
         subject = request.client.host if request.client is not None else payload.device
         await enforce_rate_limit(
@@ -80,6 +100,11 @@ def create_auth_router(
 
     @router.post("/refresh")
     async def refresh(payload: RefreshRequest, response: Response) -> dict[str, object]:
+        # 功能:轮换刷新凭证并在重放时撤销会话族
+        # 参数:
+        #     payload: 已校验的客户端刷新凭证
+        #     response: HTTP响应对象
+        # 返回:轮换后的会话标识与访问刷新凭证
         now = clock()
         subject = hashlib.sha256(payload.refresh_token.encode()).hexdigest()[:24]
         await enforce_rate_limit(
@@ -96,6 +121,10 @@ def create_auth_router(
 
     @router.post("/logout", status_code=204)
     async def logout(payload: LogoutRequest) -> None:
+        # 功能:撤销当前登录会话
+        # 参数:
+        #     payload: 已校验的待退出的会话标识
+        # 返回:无返回值。
         await service.logout(payload.session_id, clock())
 
     return router

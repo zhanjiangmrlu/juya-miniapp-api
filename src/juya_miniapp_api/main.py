@@ -19,6 +19,11 @@ def create_app(
     *,
     readiness_probe: ReadinessProbe | None = None,
 ) -> FastAPI:
+    # 功能:创建FastAPI应用并安装中间件、错误处理与业务路由
+    # 参数:
+    #     settings: 应用环境、数据库、Redis和外部服务运行配置
+    #     readiness_probe: 应用就绪接口使用的异步依赖检查回调
+    # 返回:FastAPI应用
     runtime_settings = settings or Settings()
     if runtime_settings.local_content_file and (
         runtime_settings.environment != "local" or not runtime_settings.local_dev_mode
@@ -58,6 +63,10 @@ def create_app(
         app.router.add_event_handler("shutdown", resources.close)
 
     async def configuration_readiness() -> dict[str, bool]:
+        # 功能:检查当前环境的应用配置是否满足就绪条件
+        # 参数:
+        #     无形参。
+        # 返回:依赖名称到就绪状态的映射
         return {
             "configuration": runtime_settings.application_configured()
             or runtime_settings.environment in {"local", "test"}

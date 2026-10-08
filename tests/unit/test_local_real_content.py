@@ -12,6 +12,10 @@ from juya_miniapp_api.main import create_app
 
 
 def preview_file(tmp_path: Path) -> tuple[Path, bytes]:
+    # 功能:在测试中生成本地真实内容预览测试的内容清单与媒体文件
+    # 参数:
+    #     tmp_path: pytest提供的隔离临时文件目录
+    # 返回:本地真实内容清单路径与原始WAV录音字节
     """在 tmp_path 创建含有声 PCM、固定管理修订与素材哈希的预览清单"""
     output = io.BytesIO()
     with wave.open(output, "wb") as audio:
@@ -78,6 +82,10 @@ def preview_file(tmp_path: Path) -> tuple[Path, bytes]:
 async def test_real_preview_replaces_demo_content_and_serves_exact_recording(
     tmp_path: Path,
 ) -> None:
+    # 功能:验证真实预览替换示例内容并返回原始录音
+    # 参数:
+    #     tmp_path: pytest提供的隔离临时文件目录
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     """真实预览应同步替换正文、目录、首页、词卡与收藏并提供真实音频"""
     manifest, data = preview_file(tmp_path)
     app = create_app(
@@ -143,6 +151,10 @@ async def test_real_preview_replaces_demo_content_and_serves_exact_recording(
 
 
 def test_real_preview_rejects_missing_or_mismatched_recording(tmp_path: Path) -> None:
+    # 功能:验证真实预览拒绝缺失或不匹配的录音
+    # 参数:
+    #     tmp_path: pytest提供的隔离临时文件目录
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     """清单素材缺失或哈希错误时启动失败并禁止使用另一份音频"""
     manifest, _ = preview_file(tmp_path)
     asset = tmp_path / "recording.wav"
@@ -155,6 +167,10 @@ def test_real_preview_rejects_missing_or_mismatched_recording(tmp_path: Path) ->
 
 
 def test_real_preview_cannot_be_enabled_outside_local_mode(tmp_path: Path) -> None:
+    # 功能:验证真实预览只能在本地开发模式启用
+    # 参数:
+    #     tmp_path: pytest提供的隔离临时文件目录
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     """管理端草稿预览不能在正式路由或非本地环境中开启"""
     manifest, _ = preview_file(tmp_path)
     with pytest.raises(RuntimeError, match="local"):
@@ -167,6 +183,10 @@ def test_real_preview_cannot_be_enabled_outside_local_mode(tmp_path: Path) -> No
 async def test_real_preview_history_and_missing_favorites_never_use_demo_scene(
     tmp_path: Path,
 ) -> None:
+    # 功能:验证真实预览历史和缺失收藏不回退为示例场景
+    # 参数:
+    #     tmp_path: pytest提供的隔离临时文件目录
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     """真实模式的学习历史和失效收藏不能指向已被替换的城堡演示内容"""
     manifest, _ = preview_file(tmp_path)
     app = create_app(

@@ -20,6 +20,10 @@ USER_ID = "01K00000000000000000000001"
 
 @pytest.mark.asyncio
 async def test_admin_search_and_detail_expose_contact_only_on_no_store_internal_api() -> None:
+    # 功能:验证管理端内部用户检索和详情仅在禁止缓存的接口返回联系方式
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     users = InMemoryUserRepository()
     users.add(USER_ID, "JY000000000001", nickname="学习者")
     contacts = ContactService(
@@ -30,6 +34,10 @@ async def test_admin_search_and_detail_expose_contact_only_on_no_store_internal_
     user_service = UserService(users, contacts)
 
     async def admin_service() -> ServicePrincipal:
+        # 功能:提供内部接口测试的管理端服务身份
+        # 参数:
+        #     无形参。
+        # 返回:已验证的内部调用服务身份
         return ServicePrincipal("juya-admin-api")
 
     app = FastAPI()
@@ -72,6 +80,10 @@ async def test_admin_search_and_detail_expose_contact_only_on_no_store_internal_
 
 @pytest.mark.asyncio
 async def test_admin_correction_routes_require_headers_and_never_leak_secret_fields() -> None:
+    # 功能:验证管理端纠错接口校验必要请求头且不暴露密文字段
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     users = InMemoryUserRepository()
     users.add(USER_ID, "JY000000000001", nickname="学习者")
     repository = InMemoryContactRepository()
@@ -85,6 +97,10 @@ async def test_admin_correction_routes_require_headers_and_never_leak_secret_fie
     user_service = UserService(users, contacts)
 
     async def admin_service() -> ServicePrincipal:
+        # 功能:提供内部接口测试的管理端服务身份
+        # 参数:
+        #     无形参。
+        # 返回:已验证的内部调用服务身份
         return ServicePrincipal("juya-admin-api")
 
     app = FastAPI()
@@ -158,6 +174,10 @@ async def test_admin_correction_routes_require_headers_and_never_leak_secret_fie
 
 @pytest.mark.asyncio
 async def test_admin_batch_contact_projection_preserves_order_and_learning_returns_counts() -> None:
+    # 功能:验证批量联系方式投影保持请求顺序且学习投影返回数量
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     second_user_id = "01K00000000000000000000002"
     users = InMemoryUserRepository()
     users.add(USER_ID, "JY000000000001", nickname="学习者一")
@@ -176,6 +196,10 @@ async def test_admin_batch_contact_projection_preserves_order_and_learning_retur
     overviews.favorite_entries.extend([(USER_ID, "favorite-1"), (USER_ID, "favorite-2")])
 
     async def admin_service() -> ServicePrincipal:
+        # 功能:提供内部接口测试的管理端服务身份
+        # 参数:
+        #     无形参。
+        # 返回:已验证的内部调用服务身份
         return ServicePrincipal("juya-admin-api")
 
     app = FastAPI()

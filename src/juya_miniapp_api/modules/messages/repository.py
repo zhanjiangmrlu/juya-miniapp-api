@@ -21,19 +21,58 @@ class MessageRepository(Protocol):
         related_type: str | None,
         related_id: str | None,
         now: datetime,
-    ) -> InboxMessage: ...
+    ) -> InboxMessage:
+        # 功能:按用户与业务事件幂等创建站内消息
+        # 参数:
+        #     self: 当前用户站内消息仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     event_id: 业务事件或发件箱事件的去重标识
+        #     message_type: 站内消息的业务类别
+        #     title: 站内消息向用户展示的标题
+        #     summary: 站内消息向用户展示的摘要文本
+        #     related_type: 站内消息关联业务对象的类别
+        #     related_id: 站内消息关联业务记录的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:站内消息、关联对象与已读时间
+        ...
 
     async def list_messages(
         self, user_id: str, *, after_id: str | None, limit: int
-    ) -> list[InboxMessage]: ...
+    ) -> list[InboxMessage]:
+        # 功能:按游标分页查询用户站内消息
+        # 参数:
+        #     self: 当前用户站内消息仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     after_id: 上一页最后一条记录的公开标识
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:站内消息、关联对象与已读时间集合
+        ...
 
-    async def mark_read(self, user_id: str, message_id: str, now: datetime) -> InboxMessage: ...
+    async def mark_read(self, user_id: str, message_id: str, now: datetime) -> InboxMessage:
+        # 功能:校验消息归属并幂等记录已读时间
+        # 参数:
+        #     self: 当前用户站内消息仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     message_id: 用户站内消息的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:站内消息、关联对象与已读时间
+        ...
 
-    async def count_unread(self, user_id: str) -> int: ...
+    async def count_unread(self, user_id: str) -> int:
+        # 功能:统计用户尚未读取的站内消息数量
+        # 参数:
+        #     self: 当前用户站内消息仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:当前用户未读消息数量
+        ...
 
 
 class InMemoryMessageRepository:
     def __init__(self) -> None:
+        # 功能:初始化站内消息的InMemoryMessageRepository对象的状态存储
+        # 参数:
+        #     self: 当前站内消息的InMemoryMessageRepository实例
+        # 返回:无返回值。
         self.messages: dict[str, InboxMessage] = {}
         self.event_ids: dict[str, str] = {}
 
@@ -48,6 +87,18 @@ class InMemoryMessageRepository:
         related_id: str | None,
         now: datetime,
     ) -> InboxMessage:
+        # 功能:按用户与业务事件幂等创建站内消息
+        # 参数:
+        #     self: 当前站内消息的InMemoryMessageRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     event_id: 业务事件或发件箱事件的去重标识
+        #     message_type: 站内消息的业务类别
+        #     title: 站内消息向用户展示的标题
+        #     summary: 站内消息向用户展示的摘要文本
+        #     related_type: 站内消息关联业务对象的类别
+        #     related_id: 站内消息关联业务记录的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:站内消息、关联对象与已读时间
         existing_id = self.event_ids.get(event_id)
         if existing_id is not None:
             existing = self.messages[existing_id]
@@ -72,6 +123,17 @@ class InMemoryMessageRepository:
     async def list_messages(
         self, user_id: str, *, after_id: str | None, limit: int
     ) -> list[InboxMessage]:
+        # 功能:按游标分页查询用户站内消息
+        # 参数:
+        #     self: 当前站内消息的InMemoryMessageRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     after_id: 上一页最后一条记录的公开标识
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:站内消息、关联对象与已读时间集合
+        # 匿名函数: key提取站内消息公开标识作为倒序分页的排序键
+        # 参数:
+        #     item: 当前待排序的站内消息
+        # 返回: 当前消息的公开标识字符串
         values = sorted(
             (item for item in self.messages.values() if item.user_id == user_id),
             key=lambda item: item.id,
@@ -82,6 +144,13 @@ class InMemoryMessageRepository:
         return values[:limit]
 
     async def mark_read(self, user_id: str, message_id: str, now: datetime) -> InboxMessage:
+        # 功能:校验消息归属并幂等记录已读时间
+        # 参数:
+        #     self: 当前站内消息的InMemoryMessageRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     message_id: 用户站内消息的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:站内消息、关联对象与已读时间
         item = self.messages.get(message_id)
         if item is None or item.user_id != user_id:
             raise AppError("MESSAGE_NOT_FOUND", "消息不存在", 404)
@@ -102,6 +171,11 @@ class InMemoryMessageRepository:
         return item
 
     async def count_unread(self, user_id: str) -> int:
+        # 功能:统计用户尚未读取的站内消息数量
+        # 参数:
+        #     self: 当前站内消息的InMemoryMessageRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:当前用户未读消息数量
         return sum(
             item.user_id == user_id and item.read_at is None for item in self.messages.values()
         )
@@ -109,6 +183,11 @@ class InMemoryMessageRepository:
 
 class SQLAlchemyMessageRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        # 功能:初始化站内消息的SQLAlchemyMessageRepository对象并保存所需依赖与配置
+        # 参数:
+        #     self: 当前站内消息的SQLAlchemyMessageRepository实例
+        #     session_factory: 创建数据库事务会话的异步工厂
+        # 返回:无返回值。
         self._sessions = session_factory
 
     async def create_once(
@@ -122,6 +201,18 @@ class SQLAlchemyMessageRepository:
         related_id: str | None,
         now: datetime,
     ) -> InboxMessage:
+        # 功能:按用户与业务事件幂等创建站内消息
+        # 参数:
+        #     self: 当前站内消息的SQLAlchemyMessageRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     event_id: 业务事件或发件箱事件的去重标识
+        #     message_type: 站内消息的业务类别
+        #     title: 站内消息向用户展示的标题
+        #     summary: 站内消息向用户展示的摘要文本
+        #     related_type: 站内消息关联业务对象的类别
+        #     related_id: 站内消息关联业务记录的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:站内消息、关联对象与已读时间
         message_id = new_ulid(now)
         async with self._sessions() as session, session.begin():
             internal_user_id = await self._user_id(session, user_id)
@@ -166,6 +257,13 @@ class SQLAlchemyMessageRepository:
     async def list_messages(
         self, user_id: str, *, after_id: str | None, limit: int
     ) -> list[InboxMessage]:
+        # 功能:按游标分页查询用户站内消息
+        # 参数:
+        #     self: 当前站内消息的SQLAlchemyMessageRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     after_id: 上一页最后一条记录的公开标识
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:站内消息、关联对象与已读时间集合
         cursor_clause = " AND m.id < :after_id" if after_id is not None else ""
         async with self._sessions() as session:
             rows = (
@@ -188,6 +286,13 @@ class SQLAlchemyMessageRepository:
         return [_message(row) for row in rows]
 
     async def mark_read(self, user_id: str, message_id: str, now: datetime) -> InboxMessage:
+        # 功能:校验消息归属并幂等记录已读时间
+        # 参数:
+        #     self: 当前站内消息的SQLAlchemyMessageRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     message_id: 用户站内消息的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:站内消息、关联对象与已读时间
         async with self._sessions() as session, session.begin():
             await session.execute(
                 text(
@@ -221,6 +326,11 @@ class SQLAlchemyMessageRepository:
             return _message(row)
 
     async def count_unread(self, user_id: str) -> int:
+        # 功能:统计用户尚未读取的站内消息数量
+        # 参数:
+        #     self: 当前站内消息的SQLAlchemyMessageRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:当前用户未读消息数量
         async with self._sessions() as session:
             value = await session.scalar(
                 text(
@@ -233,6 +343,11 @@ class SQLAlchemyMessageRepository:
 
     @staticmethod
     async def _user_id(session: AsyncSession, public_id: str) -> int:
+        # 功能:通过用户公开标识查询数据库内部主键
+        # 参数:
+        #     session: 异步数据库会话
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:用户账号的数据库内部主键
         value = await session.scalar(
             text("SELECT id FROM user_account WHERE public_id=:public_id"),
             {"public_id": public_id},
@@ -243,17 +358,29 @@ class SQLAlchemyMessageRepository:
 
 
 def _database_datetime(value: datetime) -> datetime:
+    # 功能:将时间转换为数据库保存的无时区UTC时间
+    # 参数:
+    #     value: 待转换时区的必填数据库或业务时间
+    # 返回:转换后的无时区UTC时间
     normalized = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
     return normalized.astimezone(UTC).replace(tzinfo=None)
 
 
 def _utc_datetime(value: datetime | None) -> datetime | None:
+    # 功能:将数据库时间统一为带UTC时区的时间并保留空值
+    # 参数:
+    #     value: 待转换时区的数据库或业务时间;空值保留为空
+    # 返回:带UTC时区的时间;原值为空时返回None
     if value is None:
         return None
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def _message(row: RowMapping) -> InboxMessage:
+    # 功能:将站内消息数据库行转换为领域消息
+    # 参数:
+    #     row: 查询返回的站内消息数据库字段映射
+    # 返回:站内消息、关联对象与已读时间
     return InboxMessage(
         id=str(row["id"]),
         user_id=str(row["user_id"]),

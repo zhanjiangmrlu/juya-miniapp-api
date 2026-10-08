@@ -12,15 +12,30 @@ NOW = datetime(2026, 9, 28, 8, 0, tzinfo=UTC)
 
 class RevocationRecorder:
     def __init__(self) -> None:
+        # 功能:初始化账号注销的RevocationRecorder对象的状态存储
+        # 参数:
+        #     self: 当前账号注销的RevocationRecorder实例
+        # 返回:无返回值。
         self.users: list[str] = []
 
     async def __call__(self, user_id: str, reason: str, now: datetime) -> None:
+        # 功能:记录账号注销测试中的会话撤销调用
+        # 参数:
+        #     self: 当前账号注销的RevocationRecorder实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     reason: 撤销、纠错或反馈异议的业务原因说明
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         del reason, now
         self.users.append(user_id)
 
 
 @pytest.mark.asyncio
 async def test_clear_learning_data_preserves_account_contact_and_entitlements() -> None:
+    # 功能:验证清空学习数据保留账号、联系方式与授权权益
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repository = InMemoryAccountRepository()
     repository.seed_user("user-1")
     repository.learning_rows.add("user-1")
@@ -47,6 +62,10 @@ async def test_clear_learning_data_preserves_account_contact_and_entitlements() 
 
 @pytest.mark.asyncio
 async def test_deletion_request_is_idempotent_and_effective_after_seven_days() -> None:
+    # 功能:验证注销申请幂等且七天等待期后生效
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repository = InMemoryAccountRepository()
     repository.seed_user("user-1")
     service = AccountLifecycleService(repository, RevocationRecorder())
@@ -62,6 +81,10 @@ async def test_deletion_request_is_idempotent_and_effective_after_seven_days() -
 
 @pytest.mark.asyncio
 async def test_revoke_and_due_execution_have_one_final_state() -> None:
+    # 功能:验证注销撤回与到期执行竞争只保留一个最终状态
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repository = InMemoryAccountRepository()
     repository.seed_user("user-1")
     revocations = RevocationRecorder()
@@ -88,6 +111,10 @@ async def test_revoke_and_due_execution_have_one_final_state() -> None:
 
 @pytest.mark.asyncio
 async def test_failed_cross_domain_cleanup_stays_deleting_and_can_retry() -> None:
+    # 功能:验证跨域清理失败时维持注销中状态并允许重试
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repository = InMemoryAccountRepository()
     repository.seed_user("user-1")
     service = AccountLifecycleService(repository, RevocationRecorder())

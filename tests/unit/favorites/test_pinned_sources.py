@@ -8,6 +8,10 @@ from juya_miniapp_api.modules.favorites.service import FavoriteService
 
 @pytest.mark.asyncio
 async def test_same_word_retains_each_published_source_and_optional_pronunciation() -> None:
+    # 功能:验证相同单词保留每个发布来源和可选发音
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repo = InMemoryFavoriteRepository()
     service = FavoriteService(repo)
     now = datetime.now(UTC)

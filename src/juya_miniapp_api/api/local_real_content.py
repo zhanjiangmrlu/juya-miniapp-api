@@ -16,6 +16,11 @@ class LocalRealContent:
     """Pin the selected management revision and validate all referenced media before serving it."""
 
     def __init__(self, manifest_path: Path) -> None:
+        # 功能:初始化本地真实发布内容加载器并保存所需依赖与配置
+        # 参数:
+        #     self: 当前本地真实发布内容加载器实例
+        #     manifest_path: 本地真实发布内容与媒体清单的文件路径
+        # 返回:无返回值。
         """manifest_path is the non-secret snapshot exported from the local management database"""
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.scene = PublishedScene.model_validate(manifest["scene"]).model_dump(mode="json")
@@ -43,6 +48,11 @@ class LocalRealContent:
             media["stat"] = (path.stat().st_size, path.stat().st_mtime_ns)
 
     def opened(self, scene_id: str) -> dict[str, Any]:
+        # 功能:读取本地真实发布场景并附加当前访问状态
+        # 参数:
+        #     self: 当前本地真实发布内容加载器实例
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        # 返回:本地真实发布场景的内容、修订版本与访问级别
         """Return a copy of the pinned revision for the requested scene_id"""
         if scene_id != self.scene_id:
             raise HTTPException(404, "Scene not found")
@@ -56,6 +66,12 @@ class LocalRealContent:
         }
 
     def catalog(self, base_url: str, progress: int) -> dict[str, Any]:
+        # 功能:读取学习目录并合并用户学习摘要与访问权限
+        # 参数:
+        #     self: 当前本地真实发布内容加载器实例
+        #     base_url: 本地媒体或上游服务的访问根地址
+        #     progress: 本地目录显示的已完成学习进度数量
+        # 返回:学习目录、当前用户摘要与场景权限信息
         """Build the local learning catalog using base_url for media and current progress"""
         content = self.scene["content"]
         cover = content["cover_asset_id"] or content["original_image_asset_id"]
@@ -81,6 +97,13 @@ class LocalRealContent:
         }
 
     def validate_resource(self, scene_id: str, resource_id: str, revision_id: str) -> None:
+        # 功能:校验本地资源属于指定场景与发布版本
+        # 参数:
+        #     self: 当前本地真实发布内容加载器实例
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        #     resource_id: 发布内容中的媒体资源标识
+        #     revision_id: 需要访问或固定的场景发布修订标识
+        # 返回:无返回值。
         """Authorize resource_id only for the selected scene_id and pinned revision_id"""
         self.opened(scene_id)
         if revision_id != self.revision_id:
@@ -89,6 +112,11 @@ class LocalRealContent:
             raise HTTPException(404, "Resource not referenced")
 
     def resource(self, resource_id: str) -> FileResponse:
+        # 功能:返回本地真实发布资源文件并支持HTTP Range
+        # 参数:
+        #     self: 当前本地真实发布内容加载器实例
+        #     resource_id: 发布内容中的媒体资源标识
+        # 返回:支持HTTP Range的本地媒体文件响应
         """Serve the exact pinned file for resource_id, retaining HTTP Range and HEAD support"""
         media = self.resources.get(resource_id)
         if not media:

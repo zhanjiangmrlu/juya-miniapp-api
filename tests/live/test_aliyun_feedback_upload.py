@@ -20,6 +20,10 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.mark.asyncio
 async def test_v4_feedback_upload_uses_exact_key_mime_and_cleanup() -> None:
+    # 功能:验证真实OSS V4反馈上传绑定对象键和MIME且完成清理
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     settings = Settings()
     if (
         settings.environment != "test"

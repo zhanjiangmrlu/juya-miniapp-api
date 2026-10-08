@@ -15,9 +15,23 @@ PROCESSING_LEASE = timedelta(minutes=5)
 
 
 class OutboxStore(Protocol):
-    async def claim_due(self, now: datetime, limit: int) -> list[OutboxEvent]: ...
+    async def claim_due(self, now: datetime, limit: int) -> list[OutboxEvent]:
+        # 功能:领取到期发件箱事件并设置处理租约
+        # 参数:
+        #     self: 当前跨域事件发件箱存储实例
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:跨域清理发件箱事件集合
+        ...
 
-    async def mark_delivered(self, event_id: str, now: datetime) -> None: ...
+    async def mark_delivered(self, event_id: str, now: datetime) -> None:
+        # 功能:标记发件箱事件投递完成并清除重试时间
+        # 参数:
+        #     self: 当前跨域事件发件箱存储实例
+        #     event_id: 业务事件或发件箱事件的去重标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
+        ...
 
     async def mark_failed(
         self,
@@ -26,7 +40,16 @@ class OutboxStore(Protocol):
         attempt_count: int,
         next_attempt_at: datetime | None,
         dead: bool,
-    ) -> None: ...
+    ) -> None:
+        # 功能:记录发件箱失败次数并设置重试或死信状态
+        # 参数:
+        #     self: 当前跨域事件发件箱存储实例
+        #     event_id: 业务事件或发件箱事件的去重标识
+        #     attempt_count: 发件箱事件已经尝试投递的次数
+        #     next_attempt_at: 发件箱事件下次重试或处理租约到期的时间
+        #     dead: 是否已达到重试上限而将发件箱事件置为死信
+        # 返回:无返回值。
+        ...
 
 
 class OutboxDispatcher:
@@ -38,6 +61,14 @@ class OutboxDispatcher:
         max_attempts: int = 8,
         base_delay: timedelta = timedelta(seconds=30),
     ) -> None:
+        # 功能:初始化带退避重试的发件箱投递器并保存所需依赖与配置
+        # 参数:
+        #     self: 当前带退避重试的发件箱投递器实例
+        #     store: 领取及更新发件箱投递状态的存储服务
+        #     handler: 异步投递一条发件箱事件的业务回调
+        #     max_attempts: 发件箱事件允许的最大投递次数
+        #     base_delay: 发件箱失败重试的指数退避基础间隔
+        # 返回:无返回值。
         if max_attempts < 1:
             raise ValueError("max_attempts must be positive")
         self._store = store
@@ -46,6 +77,12 @@ class OutboxDispatcher:
         self._base_delay = base_delay
 
     async def dispatch_due(self, now: datetime, *, limit: int = 100) -> int:
+        # 功能:逐条投递到期发件箱事件并对失败进行退避重试
+        # 参数:
+        #     self: 当前带退避重试的发件箱投递器实例
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:本次领取并尝试投递的事件数量
         events = await self._store.claim_due(now, limit)
         for event in events:
             try:
@@ -71,10 +108,21 @@ class OutboxDispatcher:
 
 class InMemoryOutboxStore:
     def __init__(self, events: Sequence[OutboxEvent] = ()) -> None:
+        # 功能:初始化小程序的InMemoryOutboxStore对象并保存所需依赖与配置
+        # 参数:
+        #     self: 当前小程序的InMemoryOutboxStore实例
+        #     events: 初始化内存发件箱时已有的事件集合
+        # 返回:无返回值。
         self.events = {event.id: event for event in events}
         self._lock = asyncio.Lock()
 
     async def claim_due(self, now: datetime, limit: int) -> list[OutboxEvent]:
+        # 功能:领取到期发件箱事件并设置处理租约
+        # 参数:
+        #     self: 当前小程序的InMemoryOutboxStore实例
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:跨域清理发件箱事件集合
         async with self._lock:
             claimed: list[OutboxEvent] = []
             for event in self.events.values():
@@ -88,6 +136,12 @@ class InMemoryOutboxStore:
             return claimed
 
     async def mark_delivered(self, event_id: str, now: datetime) -> None:
+        # 功能:标记发件箱事件投递完成并清除重试时间
+        # 参数:
+        #     self: 当前小程序的InMemoryOutboxStore实例
+        #     event_id: 业务事件或发件箱事件的去重标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         async with self._lock:
             event = self.events[event_id]
             event.status = "DELIVERED"
@@ -102,6 +156,14 @@ class InMemoryOutboxStore:
         next_attempt_at: datetime | None,
         dead: bool,
     ) -> None:
+        # 功能:记录发件箱失败次数并设置重试或死信状态
+        # 参数:
+        #     self: 当前小程序的InMemoryOutboxStore实例
+        #     event_id: 业务事件或发件箱事件的去重标识
+        #     attempt_count: 发件箱事件已经尝试投递的次数
+        #     next_attempt_at: 发件箱事件下次重试或处理租约到期的时间
+        #     dead: 是否已达到重试上限而将发件箱事件置为死信
+        # 返回:无返回值。
         async with self._lock:
             event = self.events[event_id]
             if event.status != "PROCESSING":
@@ -112,12 +174,20 @@ class InMemoryOutboxStore:
 
 
 def _database_datetime(value: datetime) -> datetime:
+    # 功能:将时间转换为数据库保存的无时区UTC时间
+    # 参数:
+    #     value: 待转换时区的必填数据库或业务时间
+    # 返回:转换后的无时区UTC时间
     if value.tzinfo is None:
         return value
     return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def _utc_datetime(value: datetime | None) -> datetime | None:
+    # 功能:将数据库时间统一为带UTC时区的时间并保留空值
+    # 参数:
+    #     value: 待转换时区的数据库或业务时间;空值保留为空
+    # 返回:带UTC时区的时间;原值为空时返回None
     if value is None:
         return None
     if value.tzinfo is None:
@@ -127,9 +197,20 @@ def _utc_datetime(value: datetime | None) -> datetime | None:
 
 class SQLAlchemyOutboxStore:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        # 功能:初始化小程序的SQLAlchemyOutboxStore对象并保存所需依赖与配置
+        # 参数:
+        #     self: 当前小程序的SQLAlchemyOutboxStore实例
+        #     session_factory: 创建数据库事务会话的异步工厂
+        # 返回:无返回值。
         self._session_factory = session_factory
 
     async def claim_due(self, now: datetime, limit: int) -> list[OutboxEvent]:
+        # 功能:领取到期发件箱事件并设置处理租约
+        # 参数:
+        #     self: 当前小程序的SQLAlchemyOutboxStore实例
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:跨域清理发件箱事件集合
         async with self._session_factory() as session, session.begin():
             rows = (
                 (
@@ -163,6 +244,12 @@ class SQLAlchemyOutboxStore:
             return [self._from_row(row) for row in rows]
 
     async def mark_delivered(self, event_id: str, now: datetime) -> None:
+        # 功能:标记发件箱事件投递完成并清除重试时间
+        # 参数:
+        #     self: 当前小程序的SQLAlchemyOutboxStore实例
+        #     event_id: 业务事件或发件箱事件的去重标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         async with self._session_factory() as session, session.begin():
             await session.execute(
                 text(
@@ -180,6 +267,14 @@ class SQLAlchemyOutboxStore:
         next_attempt_at: datetime | None,
         dead: bool,
     ) -> None:
+        # 功能:记录发件箱失败次数并设置重试或死信状态
+        # 参数:
+        #     self: 当前小程序的SQLAlchemyOutboxStore实例
+        #     event_id: 业务事件或发件箱事件的去重标识
+        #     attempt_count: 发件箱事件已经尝试投递的次数
+        #     next_attempt_at: 发件箱事件下次重试或处理租约到期的时间
+        #     dead: 是否已达到重试上限而将发件箱事件置为死信
+        # 返回:无返回值。
         async with self._session_factory() as session, session.begin():
             await session.execute(
                 text(
@@ -199,6 +294,10 @@ class SQLAlchemyOutboxStore:
 
     @staticmethod
     def _from_row(row: object) -> OutboxEvent:
+        # 功能:将数据库查询行转换为跨域清理发件箱事件
+        # 参数:
+        #     row: 查询返回的小程序数据库字段映射
+        # 返回:跨域清理发件箱事件
         mapping = cast(dict[str, object], row)
         raw_payload = mapping["payload"]
         payload = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload

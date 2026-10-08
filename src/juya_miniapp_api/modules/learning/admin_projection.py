@@ -14,16 +14,31 @@ class LearningOverview:
 
 
 class LearningOverviewRepository(Protocol):
-    async def get(self, user_id: str) -> LearningOverview: ...
+    async def get(self, user_id: str) -> LearningOverview:
+        # 功能:汇总开放场景完成数、学习天数与收藏数
+        # 参数:
+        #     self: 当前用户学习数量统计仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:开放场景完成数、学习天数和收藏数
+        ...
 
 
 class InMemoryLearningOverviewRepository:
     def __init__(self) -> None:
+        # 功能:初始化场景学习的InMemoryLearningOverviewRepository对象的状态存储
+        # 参数:
+        #     self: 当前场景学习的InMemoryLearningOverviewRepository实例
+        # 返回:无返回值。
         self.open_scene_completion_events: list[tuple[str, str]] = []
         self.checkins: list[tuple[str, date]] = []
         self.favorite_entries: list[tuple[str, str]] = []
 
     async def get(self, user_id: str) -> LearningOverview:
+        # 功能:汇总开放场景完成数、学习天数与收藏数
+        # 参数:
+        #     self: 当前场景学习的InMemoryLearningOverviewRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:开放场景完成数、学习天数和收藏数
         return LearningOverview(
             open_scene_completed_count=len(
                 {
@@ -49,9 +64,19 @@ class InMemoryLearningOverviewRepository:
 
 class SQLAlchemyLearningOverviewRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        # 功能:初始化场景学习的SQLAlchemyLearningOverviewRepository对象并保存所需依赖与配置
+        # 参数:
+        #     self: 当前场景学习的SQLAlchemyLearningOverviewRepository实例
+        #     session_factory: 创建数据库事务会话的异步工厂
+        # 返回:无返回值。
         self._session_factory = session_factory
 
     async def get(self, user_id: str) -> LearningOverview:
+        # 功能:汇总开放场景完成数、学习天数与收藏数
+        # 参数:
+        #     self: 当前场景学习的SQLAlchemyLearningOverviewRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:开放场景完成数、学习天数和收藏数
         async with self._session_factory() as session:
             row = (
                 (

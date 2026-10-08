@@ -18,6 +18,11 @@ async def test_list_entry_favorite_accepts_empty_context_and_pins_authoritative_
     entry_type: str,
     locator: str,
 ) -> None:
+    # 功能:验证列表词条收藏允许空上下文并固定权威英文内容
+    # 参数:
+    #     entry_type: 收藏词条类别,区分单词与短语
+    #     locator: 收藏来源在场景正文中的定位片段
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     from fastapi import FastAPI
 
     from juya_miniapp_api.modules.favorites.repository import InMemoryFavoriteRepository
@@ -28,6 +33,10 @@ async def test_list_entry_favorite_accepts_empty_context_and_pins_authoritative_
     requests = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        # 功能:模拟HTTP上游响应以验证列表词条收藏允许空上下文并固定权威英文内容
+        # 参数:
+        #     request: HTTP测试或上游请求对象
+        # 返回:上游HTTP响应对象
         requests.append(request)
         return httpx.Response(
             200,
@@ -45,6 +54,10 @@ async def test_list_entry_favorite_accepts_empty_context_and_pins_authoritative_
         )
 
     async def user() -> str:
+        # 功能:提供路由测试的当前用户公开标识
+        # 参数:
+        #     无形参。
+        # 返回:测试使用的用户公开标识
         return "user"
 
     async with httpx.AsyncClient(
@@ -85,6 +98,10 @@ async def test_list_entry_favorite_accepts_empty_context_and_pins_authoritative_
 
 
 def test_scene_contract_requires_published_version_and_rejects_private_fields() -> None:
+    # 功能:验证场景契约要求发布版本且拒绝私有字段
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     with pytest.raises(ValidationError):
         SceneOpenResult.model_validate({"access": "OPEN", "scene": {"public_id": "old"}})
     result = SceneOpenResult.model_validate(
@@ -118,9 +135,17 @@ def test_scene_contract_requires_published_version_and_rejects_private_fields() 
 
 @pytest.mark.asyncio
 async def test_entry_and_resource_requests_pin_revision_and_locator() -> None:
+    # 功能:验证词条与资源请求固定修订版本和来源定位
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     requests = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        # 功能:模拟HTTP上游响应以验证词条与资源请求固定修订版本和来源定位
+        # 参数:
+        #     request: HTTP测试或上游请求对象
+        # 返回:上游HTTP响应对象
         requests.append(request)
         if "/resources/" in request.url.path:
             return httpx.Response(
@@ -146,6 +171,10 @@ async def test_entry_and_resource_requests_pin_revision_and_locator() -> None:
     async with httpx.AsyncClient(
         base_url="http://admin", transport=httpx.MockTransport(handler)
     ) as http:
+        # 匿名函数: clock默认时钟在调用时读取当前UTC时间
+        # 参数:
+        #     无形参。
+        # 返回: 带UTC时区的当前时间
         client = AdminApiClient(http, secret=b"s" * 32, clock=lambda: datetime.now(UTC))
         await client.get_entry("user", "scene", "entry", "revision", 2, "sentence:0:5")
         await client.get_signed_resource("user", "scene", "asset", "revision")
@@ -161,9 +190,17 @@ async def test_entry_and_resource_requests_pin_revision_and_locator() -> None:
 
 @pytest.mark.asyncio
 async def test_preview_has_whitelisted_metadata_and_never_creates_learning_history() -> None:
+    # 功能:验证预览只返回白名单元数据且不写入学习历史
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     from juya_miniapp_api.modules.learning.access_service import AccessService, InMemoryOpenHistory
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        # 功能:模拟HTTP上游响应以验证预览只返回白名单元数据且不写入学习历史
+        # 参数:
+        #     request: HTTP测试或上游请求对象
+        # 返回:上游HTTP响应对象
         return httpx.Response(
             200,
             json={

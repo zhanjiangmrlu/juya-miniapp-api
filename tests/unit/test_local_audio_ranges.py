@@ -10,6 +10,10 @@ from juya_miniapp_api.main import create_app
     "path", ["/local-dev/resources/coffee-audio", "/local-dev/media/audio-evolved.wav"]
 )
 async def test_local_audio_supports_seek_ranges_and_head(path: str) -> None:
+    # 功能:验证本地音频支持Range拖动和HEAD请求
+    # 参数:
+    #     path: 待请求的内部接口路径
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     app = create_app(Settings(environment="local", local_dev_mode=True))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         full = await client.get(path)

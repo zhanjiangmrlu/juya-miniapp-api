@@ -21,9 +21,24 @@ class AuthRepository(Protocol):
         openid_ciphertext: bytes,
         openid_hmac: bytes,
         now: datetime,
-    ) -> UserSummary: ...
+    ) -> UserSummary:
+        # 功能:通过微信身份查找账号并在不存在时安全创建
+        # 参数:
+        #     self: 当前用户微信身份与登录会话仓库实例
+        #     app_id: 微信小程序应用标识
+        #     openid_ciphertext: 加密后的微信openid,避免明文存储身份
+        #     openid_hmac: 微信openid的不可逆检索摘要
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:用户公开标识、句芽编号与账号状态
+        ...
 
-    async def create_session(self, session: SessionRecord) -> None: ...
+    async def create_session(self, session: SessionRecord) -> None:
+        # 功能:保存登录会话与刷新凭证摘要
+        # 参数:
+        #     self: 当前用户微信身份与登录会话仓库实例
+        #     session: 登录会话与刷新凭证摘要
+        # 返回:无返回值。
+        ...
 
     async def rotate_refresh(
         self,
@@ -32,19 +47,56 @@ class AuthRepository(Protocol):
         replacement_hash: bytes,
         replacement_expires_at: datetime,
         now: datetime,
-    ) -> SessionRecord: ...
+    ) -> SessionRecord:
+        # 功能:原子轮换刷新摘要并识别失效或重放凭证
+        # 参数:
+        #     self: 当前用户微信身份与登录会话仓库实例
+        #     session_id: 登录会话的公开标识
+        #     provided_hash: 客户端提交刷新凭证的SHA256摘要
+        #     replacement_hash: 新刷新凭证的SHA256摘要
+        #     replacement_expires_at: 轮换后刷新凭证与会话的失效时间
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:登录会话与刷新凭证摘要
+        ...
 
-    async def revoke_session(self, session_id: str, now: datetime) -> None: ...
+    async def revoke_session(self, session_id: str, now: datetime) -> None:
+        # 功能:标记单个登录会话失效
+        # 参数:
+        #     self: 当前用户微信身份与登录会话仓库实例
+        #     session_id: 登录会话的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
+        ...
 
-    async def revoke_all(self, user_id: str, reason: str, now: datetime) -> None: ...
+    async def revoke_all(self, user_id: str, reason: str, now: datetime) -> None:
+        # 功能:撤销用户全部会话并记录撤销原因
+        # 参数:
+        #     self: 当前用户微信身份与登录会话仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     reason: 撤销、纠错或反馈异议的业务原因说明
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
+        ...
 
     async def validate_access_session(
         self, user_id: str, session_id: str, now: datetime
-    ) -> None: ...
+    ) -> None:
+        # 功能:校验访问凭证对应会话仍有效且账号允许访问
+        # 参数:
+        #     self: 当前用户微信身份与登录会话仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     session_id: 登录会话的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
+        ...
 
 
 class InMemoryAuthRepository:
     def __init__(self) -> None:
+        # 功能:初始化登录会话的InMemoryAuthRepository对象的状态存储
+        # 参数:
+        #     self: 当前登录会话的InMemoryAuthRepository实例
+        # 返回:无返回值。
         self.identities: dict[tuple[str, bytes], UserSummary] = {}
         self.sessions: dict[str, SessionRecord] = {}
         self.next_user_status = "ACTIVE"
@@ -57,6 +109,14 @@ class InMemoryAuthRepository:
         openid_hmac: bytes,
         now: datetime,
     ) -> UserSummary:
+        # 功能:通过微信身份查找账号并在不存在时安全创建
+        # 参数:
+        #     self: 当前登录会话的InMemoryAuthRepository实例
+        #     app_id: 微信小程序应用标识
+        #     openid_ciphertext: 加密后的微信openid,避免明文存储身份
+        #     openid_hmac: 微信openid的不可逆检索摘要
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:用户公开标识、句芽编号与账号状态
         del openid_ciphertext
         async with self._lock:
             existing = self.identities.get((app_id, openid_hmac))
@@ -72,6 +132,11 @@ class InMemoryAuthRepository:
             return user
 
     async def create_session(self, session: SessionRecord) -> None:
+        # 功能:保存登录会话与刷新凭证摘要
+        # 参数:
+        #     self: 当前登录会话的InMemoryAuthRepository实例
+        #     session: 登录会话与刷新凭证摘要
+        # 返回:无返回值。
         self.sessions[session.id] = session
 
     async def rotate_refresh(
@@ -82,6 +147,15 @@ class InMemoryAuthRepository:
         replacement_expires_at: datetime,
         now: datetime,
     ) -> SessionRecord:
+        # 功能:原子轮换刷新摘要并识别失效或重放凭证
+        # 参数:
+        #     self: 当前登录会话的InMemoryAuthRepository实例
+        #     session_id: 登录会话的公开标识
+        #     provided_hash: 客户端提交刷新凭证的SHA256摘要
+        #     replacement_hash: 新刷新凭证的SHA256摘要
+        #     replacement_expires_at: 轮换后刷新凭证与会话的失效时间
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:登录会话与刷新凭证摘要
         async with self._lock:
             session = self.sessions.get(session_id)
             if session is None:
@@ -99,17 +173,37 @@ class InMemoryAuthRepository:
             return session
 
     async def revoke_session(self, session_id: str, now: datetime) -> None:
+        # 功能:标记单个登录会话失效
+        # 参数:
+        #     self: 当前登录会话的InMemoryAuthRepository实例
+        #     session_id: 登录会话的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         session = self.sessions.get(session_id)
         if session is not None and session.revoked_at is None:
             session.revoked_at = now
 
     async def revoke_all(self, user_id: str, reason: str, now: datetime) -> None:
+        # 功能:撤销用户全部会话并记录撤销原因
+        # 参数:
+        #     self: 当前登录会话的InMemoryAuthRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     reason: 撤销、纠错或反馈异议的业务原因说明
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         del reason
         for session in self.sessions.values():
             if session.user.public_id == user_id and session.revoked_at is None:
                 session.revoked_at = now
 
     async def validate_access_session(self, user_id: str, session_id: str, now: datetime) -> None:
+        # 功能:校验访问凭证对应会话仍有效且账号允许访问
+        # 参数:
+        #     self: 当前登录会话的InMemoryAuthRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     session_id: 登录会话的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         session = self.sessions.get(session_id)
         if session is None or session.user.public_id != user_id:
             raise AppError("SESSION_INVALID", "会话无效", 401)
@@ -120,12 +214,20 @@ class InMemoryAuthRepository:
 
 
 def _database_datetime(value: datetime) -> datetime:
+    # 功能:将时间转换为数据库保存的无时区UTC时间
+    # 参数:
+    #     value: 待转换时区的必填数据库或业务时间
+    # 返回:转换后的无时区UTC时间
     if value.tzinfo is None:
         return value
     return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def _utc_datetime(value: datetime) -> datetime:
+    # 功能:将必填数据库时间统一为带UTC时区的时间
+    # 参数:
+    #     value: 待转换时区的必填数据库或业务时间
+    # 返回:转换后的带UTC时区时间
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
@@ -133,6 +235,11 @@ def _utc_datetime(value: datetime) -> datetime:
 
 class SQLAlchemyAuthRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        # 功能:初始化登录会话的SQLAlchemyAuthRepository对象并保存所需依赖与配置
+        # 参数:
+        #     self: 当前登录会话的SQLAlchemyAuthRepository实例
+        #     session_factory: 创建数据库事务会话的异步工厂
+        # 返回:无返回值。
         self._session_factory = session_factory
 
     async def get_or_create_user(
@@ -142,6 +249,14 @@ class SQLAlchemyAuthRepository:
         openid_hmac: bytes,
         now: datetime,
     ) -> UserSummary:
+        # 功能:通过微信身份查找账号并在不存在时安全创建
+        # 参数:
+        #     self: 当前登录会话的SQLAlchemyAuthRepository实例
+        #     app_id: 微信小程序应用标识
+        #     openid_ciphertext: 加密后的微信openid,避免明文存储身份
+        #     openid_hmac: 微信openid的不可逆检索摘要
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:用户公开标识、句芽编号与账号状态
         async with self._session_factory() as session:
             existing = await self._find_user(session, app_id, openid_hmac)
             if existing is not None:
@@ -201,6 +316,11 @@ class SQLAlchemyAuthRepository:
             return winner
 
     async def create_session(self, session_record: SessionRecord) -> None:
+        # 功能:保存登录会话与刷新凭证摘要
+        # 参数:
+        #     self: 当前登录会话的SQLAlchemyAuthRepository实例
+        #     session_record: 待保存的登录会话及刷新摘要领域记录
+        # 返回:无返回值。
         async with self._session_factory() as session, session.begin():
             user_id = await session.scalar(
                 text("SELECT id FROM user_account WHERE public_id = :public_id"),
@@ -231,6 +351,15 @@ class SQLAlchemyAuthRepository:
         replacement_expires_at: datetime,
         now: datetime,
     ) -> SessionRecord:
+        # 功能:原子轮换刷新摘要并识别失效或重放凭证
+        # 参数:
+        #     self: 当前登录会话的SQLAlchemyAuthRepository实例
+        #     session_id: 登录会话的公开标识
+        #     provided_hash: 客户端提交刷新凭证的SHA256摘要
+        #     replacement_hash: 新刷新凭证的SHA256摘要
+        #     replacement_expires_at: 轮换后刷新凭证与会话的失效时间
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:登录会话与刷新凭证摘要
         error: AppError | None = None
         result: SessionRecord | None = None
         async with self._session_factory() as session, session.begin():
@@ -286,10 +415,23 @@ class SQLAlchemyAuthRepository:
         return result
 
     async def revoke_session(self, session_id: str, now: datetime) -> None:
+        # 功能:标记单个登录会话失效
+        # 参数:
+        #     self: 当前登录会话的SQLAlchemyAuthRepository实例
+        #     session_id: 登录会话的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         async with self._session_factory() as session, session.begin():
             await self._mark_revoked(session, session_id, now)
 
     async def revoke_all(self, user_id: str, reason: str, now: datetime) -> None:
+        # 功能:撤销用户全部会话并记录撤销原因
+        # 参数:
+        #     self: 当前登录会话的SQLAlchemyAuthRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     reason: 撤销、纠错或反馈异议的业务原因说明
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         del reason
         async with self._session_factory() as session, session.begin():
             await session.execute(
@@ -302,6 +444,13 @@ class SQLAlchemyAuthRepository:
             )
 
     async def validate_access_session(self, user_id: str, session_id: str, now: datetime) -> None:
+        # 功能:校验访问凭证对应会话仍有效且账号允许访问
+        # 参数:
+        #     self: 当前登录会话的SQLAlchemyAuthRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     session_id: 登录会话的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         async with self._session_factory() as session:
             row = (
                 (
@@ -328,6 +477,12 @@ class SQLAlchemyAuthRepository:
     async def _find_user(
         session: AsyncSession, app_id: str, openid_hmac: bytes
     ) -> UserSummary | None:
+        # 功能:通过微信应用与openid摘要查找已有账号
+        # 参数:
+        #     session: 异步数据库会话
+        #     app_id: 微信小程序应用标识
+        #     openid_hmac: 微信openid的不可逆检索摘要
+        # 返回:用户公开标识、句芽编号与账号状态;不存在或无候选时返回None
         row = (
             (
                 await session.execute(
@@ -348,6 +503,12 @@ class SQLAlchemyAuthRepository:
 
     @staticmethod
     async def _touch_user(session: AsyncSession, public_id: str, now: datetime) -> None:
+        # 功能:更新账号的最近活跃时间
+        # 参数:
+        #     session: 异步数据库会话
+        #     public_id: 当前操作所属用户账号的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         await session.execute(
             text("UPDATE user_account SET last_active_at = :now WHERE public_id = :public_id"),
             {"now": _database_datetime(now), "public_id": public_id},
@@ -355,6 +516,12 @@ class SQLAlchemyAuthRepository:
 
     @staticmethod
     async def _mark_revoked(session: AsyncSession, session_id: str, now: datetime) -> None:
+        # 功能:在当前事务内标记登录会话失效
+        # 参数:
+        #     session: 异步数据库会话
+        #     session_id: 登录会话的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         await session.execute(
             text(
                 "UPDATE user_session SET revoked_at = COALESCE(revoked_at, :now) "

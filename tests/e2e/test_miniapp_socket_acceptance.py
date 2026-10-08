@@ -25,12 +25,23 @@ ADMIN = ROOT.parent / "juya-admin-api"
 
 
 def free_port() -> int:
+    # 功能:在测试中选择可供本地Socket验收启动服务的空闲端口
+    # 参数:
+    #     无形参。
+    # 返回:可供验收服务绑定的本地TCP端口
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         return int(listener.getsockname()[1])
 
 
 async def admin_fixture_state(database: str, ticket: str, status: str, round_no: int = 0) -> None:
+    # 功能:在测试中修改隔离数据库中的反馈状态以驱动Socket验收
+    # 参数:
+    #     database: Socket验收使用的隔离数据库连接地址
+    #     ticket: Socket验收创建的反馈记录公开标识
+    #     status: 写入验收反馈记录的问题处理状态
+    #     round_no: 反馈验收流程中的补充轮次编号
+    # 返回:无返回值。
     """Arrange only the newly created acceptance ticket's administrator transition."""
     engine = create_engine(database.replace("mysql+pymysql://", "mysql+asyncmy://"))
     try:
@@ -56,6 +67,10 @@ async def admin_fixture_state(database: str, ticket: str, status: str, round_no:
 
 
 async def seed_contract(database: str) -> tuple[list[str], list[str], dict, str]:
+    # 功能:在测试中在隔离数据库中创建Socket验收的发布内容与用户契约数据
+    # 参数:
+    #     database: Socket验收使用的隔离数据库连接地址
+    # 返回:验收场景、词条、契约数据与反馈标识
     engine = create_engine(database.replace("mysql+pymysql://", "mysql+asyncmy://"))
     sessions = create_session_factory(engine)
     now = datetime.now(UTC)
@@ -146,6 +161,10 @@ async def seed_contract(database: str) -> tuple[list[str], list[str], dict, str]
 
 
 def test_normal_runtime_over_socket_closes_miniapp_user_flows(tmp_path: Path) -> None:
+    # 功能:验证真实Socket运行模式贯通小程序主要用户流程
+    # 参数:
+    #     tmp_path: pytest提供的隔离临时文件目录
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     database = os.getenv("JUYA_TEST_DATABASE_URL")
     redis = os.getenv("JUYA_TEST_REDIS_URL")
     isolated = os.getenv("JUYA_V13_ISOLATED_DATABASE", "")

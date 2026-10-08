@@ -3,6 +3,10 @@ from juya_miniapp_api.modules.learning.service import select_today_task
 
 
 def test_today_task_uses_fixed_priority_order() -> None:
+    # 功能:验证今日任务遵循固定候选优先级
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     unfinished = [TodayTask("SCENE", "recent-unfinished")]
     new_scenes = [TodayTask("SCENE", "first-new")]
     reviews = [TodayTask("FAVORITE", f"card-{index}") for index in range(12)]

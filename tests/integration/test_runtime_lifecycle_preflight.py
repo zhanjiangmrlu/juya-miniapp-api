@@ -11,6 +11,10 @@ spec.loader.exec_module(helper)
 
 
 def isolated_environment() -> dict[str, str]:
+    # 功能:在测试中构造隔离生命周期验收的容器环境变量
+    # 参数:
+    #     无形参。
+    # 返回:测试限定的数据库、Redis、服务地址与环境配置
     return {
         "JUYA_ENVIRONMENT": "local",
         "JUYA_DATABASE_URL": "mysql+asyncmy://user:secret@host.docker.internal:3306/juya_v13_local_e2e",
@@ -33,6 +37,11 @@ def isolated_environment() -> dict[str, str]:
     ],
 )
 def test_helper_refuses_business_database_and_mismatched_stack(key: str, value: str) -> None:
+    # 功能:验证生命周期辅助脚本拒绝业务数据库与不一致的隔离环境
+    # 参数:
+    #     key: 本轮参数化测试修改的验收环境变量名称
+    #     value: 请求或测试配置中待校验的小程序字段内容
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     admin = isolated_environment()
     mini = {**admin, key: value}
     with pytest.raises(ValueError):
@@ -40,6 +49,10 @@ def test_helper_refuses_business_database_and_mismatched_stack(key: str, value: 
 
 
 def test_mini_worker_role_and_secrets_are_not_put_on_command_line() -> None:
+    # 功能:验证小程序worker角色正确且凭证不出现在命令行
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     env = isolated_environment()
     info = {"Config": {"Image": "test-image", "Env": [f"{k}={v}" for k, v in env.items()]}}
     args, child = helper.command("mini-worker", info, Path("D:/test"))

@@ -42,6 +42,10 @@ _ANONYMOUS_ENUMS = {
 
 
 def is_anonymous_dimension(value: str) -> bool:
+    # 功能:校验统计维度不含用户可识别信息
+    # 参数:
+    #     value: 需要检查是否包含用户身份信息的统计维度
+    # 返回:统计维度是否满足匿名字段约束
     return value in _ANONYMOUS_ENUMS or (
         bool(re.fullmatch(r"(?:scene|series|package|campaign):[A-Za-z0-9_-]{1,64}", value))
         and not re.search(
@@ -107,6 +111,12 @@ PAYLOAD_FIELDS = frozenset(
 
 
 def validate_event(event_type: str, dimension: str, payload: Mapping[str, object]) -> None:
+    # 功能:校验统计事件类型、匿名维度与白名单载荷
+    # 参数:
+    #     event_type: 统计或发件箱事件的业务类别
+    #     dimension: 业务统计使用的匿名维度标签
+    #     payload: 统计事件的白名单业务字段,不包含敏感用户信息
+    # 返回:无返回值。
     if event_type not in EVENT_METRICS or not is_anonymous_dimension(dimension):
         raise ValueError("Unsupported analytics event or non-anonymous dimension")
     if set(payload) - PAYLOAD_FIELDS:
@@ -142,6 +152,16 @@ async def append_event(
     dimension: str = "ALL",
     payload: Mapping[str, object] | None = None,
 ) -> bool:
+    # 功能:在当前事务中写入去重的业务统计事件
+    # 参数:
+    #     session: 异步数据库会话
+    #     event_key: 统计事件唯一键,重复写入时用于去重
+    #     event_type: 统计或发件箱事件的业务类别
+    #     user_id: 业务数据库中的用户内部数值主键; 匿名事件可为None
+    #     occurred_at: 业务统计事件实际发生的时间
+    #     dimension: 业务统计使用的匿名维度标签
+    #     payload: 统计事件的白名单业务字段,不包含敏感用户信息
+    # 返回:是否新写入事件;重复事件返回False
     body = dict(payload or {})
     validate_event(event_type, dimension, body)
     if not event_key or len(event_key) > 191:
@@ -168,6 +188,12 @@ async def append_event(
 async def append_activity_events(
     session: AsyncSession, user_id: int, occurred_at: datetime
 ) -> None:
+    # 功能:写入去重的用户活跃统计事件
+    # 参数:
+    #     session: 异步数据库会话
+    #     user_id: 业务数据库中的用户内部数值主键
+    #     occurred_at: 业务统计事件实际发生的时间
+    # 返回:无返回值。
     """First successful learning operation per Beijing day / calendar week / month."""
     day = occurred_at.astimezone(ZoneInfo("Asia/Shanghai")).date()
     for event_type, prefix, period_day in (

@@ -17,12 +17,22 @@ from juya_miniapp_api.shared.errors import AppError
 
 
 def normalize_favorite_key(text: str) -> str:
+    # 功能:统一收藏文本的Unicode、大小写与空白以实现去重
+    # 参数:
+    #     text: 收藏英文词条原文,标准化后作为去重键
+    # 返回:用于收藏去重的Unicode、大小写和空白统一文本
     normalized = unicodedata.normalize("NFKC", text).strip().casefold()
     return re.sub(r"\s+", " ", normalized)
 
 
 class FavoriteService:
     def __init__(self, repository: FavoriteRepository, access: AccessService | None = None) -> None:
+        # 功能:初始化收藏及复习业务服务并保存所需依赖与配置
+        # 参数:
+        #     self: 当前收藏及复习业务服务实例
+        #     repository: 收藏与复习会话仓库,承载收藏复习业务操作
+        #     access: 校验场景权限并解析已发布内容的访问服务
+        # 返回:无返回值。
         self._repository = repository
         self._access = access
 
@@ -41,6 +51,21 @@ class FavoriteService:
         entry_version: int = 1,
         entry_snapshot: dict[str, Any] | None = None,
     ) -> FavoriteEntry:
+        # 功能:校验收藏内容并合并同一标准化词条的来源快照
+        # 参数:
+        #     self: 当前收藏及复习业务服务实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     entry_type: 收藏词条类别,区分单词与短语
+        #     text: 收藏英文词条原文,标准化后作为去重键
+        #     entry_stable_id: 跨内容修订保持稳定的词条标识
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        #     sentence_snapshot: 收藏时固定的来源语句内容
+        #     source_locator: 词条来源在固定场景版本中的定位片段
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        #     revision_id: 需要访问或固定的场景发布修订标识
+        #     entry_version: 固定词条的内容版本号
+        #     entry_snapshot: 收藏时固定的词条展示与发音内容快照
+        # 返回:收藏记录及固定版本来源快照
         if entry_type not in {"VOCABULARY", "PHRASE"}:
             raise AppError("FAVORITE_TYPE_INVALID", "收藏类型无效", 422)
         if self._access is not None:
@@ -82,6 +107,13 @@ class FavoriteService:
         *,
         accessible_scene_ids: Collection[str],
     ) -> FavoriteEntry:
+        # 功能:读取当前用户收藏并按场景授权生成来源跳转链接
+        # 参数:
+        #     self: 当前收藏及复习业务服务实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     favorite_id: 当前用户收藏记录的公开标识
+        #     accessible_scene_ids: 当前用户有权打开的场景公开标识集合
+        # 返回:收藏记录及固定版本来源快照
         favorite = await self._repository.get(user_id, favorite_id)
         if favorite is None:
             raise AppError("FAVORITE_NOT_FOUND", "收藏不存在", 404)
@@ -115,6 +147,12 @@ class FavoriteService:
         )
 
     async def delete(self, user_id: str, favorite_id: str) -> None:
+        # 功能:删除当前用户收藏与关联来源
+        # 参数:
+        #     self: 当前收藏及复习业务服务实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     favorite_id: 当前用户收藏记录的公开标识
+        # 返回:无返回值。
         await self._repository.delete(user_id, favorite_id)
 
     async def create_review(
@@ -124,6 +162,14 @@ class FavoriteService:
         idempotency_key: str,
         now: datetime,
     ) -> ReviewSession:
+        # 功能:校验并固定用户选择的收藏卡片生成复习会话
+        # 参数:
+        #     self: 当前收藏及复习业务服务实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     card_ids: 本次复习选择的收藏公开标识序列
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:固定所选收藏卡片的复习会话
         if not idempotency_key or len(idempotency_key) > 128:
             raise AppError("IDEMPOTENCY_KEY_INVALID", "幂等键无效", 422)
         if not card_ids or any(
@@ -142,6 +188,14 @@ class FavoriteService:
         idempotency_key: str,
         now: datetime,
     ) -> ReviewCompletion:
+        # 功能:幂等完成复习并更新所选收藏的复习时间与打卡
+        # 参数:
+        #     self: 当前收藏及复习业务服务实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     review_id: 收藏复习会话的公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:复习完成状态与打卡日期
         if not idempotency_key or len(idempotency_key) > 128:
             raise AppError("IDEMPOTENCY_KEY_INVALID", "幂等键无效", 422)
         return await self._repository.complete_review(user_id, review_id, idempotency_key, now)

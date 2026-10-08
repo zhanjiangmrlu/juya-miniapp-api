@@ -18,6 +18,10 @@ from juya_miniapp_api.shared.ids import new_ulid
 
 @pytest.mark.asyncio
 async def test_sql_reviews_validate_snapshot_and_contacts_emit_one_conversion():
+    # 功能:验证SQL复习校验固定快照且联系方式只产生一次转化事件
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     url = os.getenv("JUYA_TEST_DATABASE_URL")
     if not url:
         pytest.skip("isolated MySQL required")

@@ -27,12 +27,25 @@ class UserService:
         avatar_verifier: Callable[[str, str], Awaitable[str]] | None = None,
         open_completion_count: Callable[[str], Awaitable[int]] | None = None,
     ) -> None:
+        # 功能:初始化用户资料查询更新服务并保存所需依赖与配置
+        # 参数:
+        #     self: 当前用户资料查询更新服务实例
+        #     repository: 用户资料存储仓库,承载用户资料业务操作
+        #     contacts: 查询和更新用户联系方式的业务服务
+        #     avatar_verifier: 核验头像归属和图片内容并返回固定对象键的异步回调
+        #     open_completion_count: 查询用户开放场景完成数量的异步回调
+        # 返回:无返回值。
         self._repository = repository
         self._contacts = contacts
         self._avatar_verifier = avatar_verifier
         self._open_completion_count = open_completion_count
 
     async def get_me(self, public_id: str) -> MeView:
+        # 功能:读取账号资料、联系方式与引导资格
+        # 参数:
+        #     self: 当前用户资料查询更新服务实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:用户资料、联系方式和引导资格投影
         profile = await self._repository.get_profile(public_id)
         if profile is None:
             raise AppError("USER_NOT_FOUND", "用户不存在", 404)
@@ -58,6 +71,14 @@ class UserService:
         avatar_object_key: str | None,
         now: datetime,
     ) -> MeView:
+        # 功能:校验头像对象归属并更新用户昵称与头像资料
+        # 参数:
+        #     self: 当前用户资料查询更新服务实例
+        #     public_id: 当前操作所属用户账号的公开标识
+        #     nickname: 待保存的用户昵称; None表示未提供或清空昵称
+        #     avatar_object_key: 用户头像在OSS中的对象键
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:用户资料、联系方式和引导资格投影
         cleaned_nickname = nickname.strip() if nickname else None
         if cleaned_nickname == "":
             cleaned_nickname = None
@@ -75,6 +96,13 @@ class UserService:
     async def search(
         self, *, juya_number: str | None, nickname: str | None, limit: int = 50
     ) -> list[MeView]:
+        # 功能:按句芽编号或昵称搜索用户公开资料
+        # 参数:
+        #     self: 当前用户资料查询更新服务实例
+        #     juya_number: 用户对外展示的句芽编号,亦可作为搜索条件
+        #     nickname: 需要匹配的昵称搜索文本; None表示不按昵称筛选
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:用户资料、联系方式和引导资格投影集合
         profiles = await self._repository.search_profiles(
             juya_number=juya_number, nickname=nickname, limit=min(limit, 100)
         )

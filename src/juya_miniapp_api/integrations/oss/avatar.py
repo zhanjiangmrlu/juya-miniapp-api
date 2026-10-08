@@ -12,6 +12,11 @@ from juya_miniapp_api.shared.errors import AppError
 
 
 def owned_avatar_key(user_id: str, key: str) -> bool:
+    # 功能:校验头像对象键属于指定用户且路径格式合法
+    # 参数:
+    #     user_id: 当前操作所属用户的公开标识
+    #     key: 待校验归属并固定的头像OSS对象键
+    # 返回:头像对象键是否属于该用户且路径合法
     return bool(
         re.fullmatch(
             rf"(?:uploads/avatars|avatars)/{re.escape(user_id)}/[A-Za-z0-9_-]+\.(?:jpg|png|webp)",
@@ -26,6 +31,14 @@ class AvatarStore:
     def __init__(
         self, *, region: str, bucket: str, endpoint: str | None, credentials_provider: Any
     ) -> None:
+        # 功能:初始化小程序的AvatarStore对象并保存所需依赖与配置
+        # 参数:
+        #     self: 当前小程序的AvatarStore实例
+        #     region: OSS存储桶所在地域
+        #     bucket: OSS存储桶名称
+        #     endpoint: OSS HTTPS服务端点
+        #     credentials_provider: 读取或轮换OSS访问凭证的提供器
+        # 返回:无返回值。
         config = oss.config.load_default()
         config.region = region
         config.credentials_provider = credentials_provider
@@ -35,11 +48,23 @@ class AvatarStore:
         self.bucket = bucket
 
     async def confirm(self, user_id: str, key: str) -> str:
+        # 功能:核验已上传头像的归属与图片内容并固定头像地址
+        # 参数:
+        #     self: 当前小程序的AvatarStore实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     key: 待校验归属并固定的头像OSS对象键
+        # 返回:核验并固定后的头像OSS对象键
         if not owned_avatar_key(user_id, key):
             raise AppError("AVATAR_OBJECT_KEY_INVALID", "头像对象键无效", 422)
         return await asyncio.to_thread(self._confirm, user_id, key)
 
     def _confirm(self, user_id: str, key: str) -> str:
+        # 功能:核验头像对象内容并生成固定的标准化头像对象
+        # 参数:
+        #     self: 当前小程序的AvatarStore实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     key: 待校验归属并固定的头像OSS对象键
+        # 返回:核验并固定后的头像OSS对象键
         try:
             result = self.client.get_object(oss.GetObjectRequest(bucket=self.bucket, key=key))
             try:

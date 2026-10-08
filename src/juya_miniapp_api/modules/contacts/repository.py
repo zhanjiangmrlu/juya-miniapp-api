@@ -38,20 +38,52 @@ _SAFE_CONTACT_EVENT_TYPES = frozenset(
 
 
 class ContactRepository(Protocol):
-    async def has_prompt_exposure(self, user_id: str) -> bool: ...
+    async def has_prompt_exposure(self, user_id: str) -> bool:
+        # 功能:查询用户是否已展示过联系方式引导
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:该用户是否已有联系方式引导曝光
+        ...
 
     async def record_prompt_exposure(
         self,
         user_id: str,
         idempotency_key: str,
         now: datetime,
-    ) -> bool: ...
+    ) -> bool:
+        # 功能:幂等保存用户联系方式引导曝光来源与分组
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:是否为用户首次成功登记引导曝光
+        ...
 
-    async def get_contact(self, user_id: str) -> ContactRecord | None: ...
+    async def get_contact(self, user_id: str) -> ContactRecord | None:
+        # 功能:读取当前用户联系方式状态
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:加密联系方式与变更状态记录;不存在或无候选时返回None
+        ...
 
-    async def get_contacts(self, user_ids: tuple[str, ...]) -> tuple[ContactRecord, ...]: ...
+    async def get_contacts(self, user_ids: tuple[str, ...]) -> tuple[ContactRecord, ...]:
+        # 功能:批量读取用户联系方式记录并保持输入顺序
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     user_ids: 需要批量查询联系方式的用户公开标识序列
+        # 返回:加密联系方式与变更状态记录集合,保持输入的用户顺序
+        ...
 
-    async def find_user_by_hmac(self, lookup_hmac: bytes) -> str | None: ...
+    async def find_user_by_hmac(self, lookup_hmac: bytes) -> str | None:
+        # 功能:按微信号检索摘要查找所属用户
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     lookup_hmac: 标准化微信号的不可逆检索摘要
+        # 返回:微信联系方式所属用户公开标识;未找到时为None
+        ...
 
     async def save_contact(
         self,
@@ -61,19 +93,59 @@ class ContactRepository(Protocol):
         consent_version: str,
         source: str,
         now: datetime,
-    ) -> ContactRecord: ...
+    ) -> ContactRecord:
+        # 功能:保存联系方式并限制真实变更次数与纠错状态
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     ciphertext: 待解密的敏感字段密文字节
+        #     lookup_hmac: 标准化微信号的不可逆检索摘要
+        #     consent_version: 用户保存联系方式时同意的隐私条款版本
+        #     source: 用户保存微信联系方式的来源页面或入口
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
+        ...
 
-    async def withdraw(self, user_id: str, now: datetime) -> ContactRecord: ...
+    async def withdraw(self, user_id: str, now: datetime) -> ContactRecord:
+        # 功能:撤回联系方式并删除加密内容与检索摘要
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
+        ...
 
     async def create_correction(
         self, user_id: str, reason: str, now: datetime
-    ) -> CorrectionRequest: ...
+    ) -> CorrectionRequest:
+        # 功能:创建联系方式纠错申请并限制重复有效申请
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     reason: 撤销、纠错或反馈异议的业务原因说明
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:联系方式纠错申请
+        ...
 
     async def list_corrections(
         self, status: str | None, page: int, page_size: int
-    ) -> tuple[tuple[AdminCorrectionRecord, ...], int]: ...
+    ) -> tuple[tuple[AdminCorrectionRecord, ...], int]:
+        # 功能:分页筛选管理员可见的联系方式纠错申请
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     status: 纠错申请状态筛选条件; None表示不按状态筛选
+        #     page: 管理端纠错申请列表的页码
+        #     page_size: 管理端纠错申请每页最多返回的记录数
+        # 返回:本页纠错申请记录集合及符合条件的总记录数量
+        ...
 
-    async def get_correction(self, correction_id: str) -> AdminCorrectionRecord | None: ...
+    async def get_correction(self, correction_id: str) -> AdminCorrectionRecord | None:
+        # 功能:读取联系方式纠错申请的管理端详情
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     correction_id: 联系方式纠错申请的公开标识
+        # 返回:管理端纠错申请与用户关联记录;不存在或无候选时返回None
+        ...
 
     async def decide_correction(
         self,
@@ -83,17 +155,49 @@ class ContactRepository(Protocol):
         idempotency_key: str,
         request_hash: str,
         now: datetime,
-    ) -> CorrectionRequest: ...
+    ) -> CorrectionRequest:
+        # 功能:幂等处理管理员的联系方式纠错批准或拒绝决定
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     correction_id: 联系方式纠错申请的公开标识
+        #     decision: 管理员对纠错申请作出的批准或拒绝决定
+        #     actor_id: 本次变更操作者的标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     request_hash: 纠错决定请求内容摘要,用于识别幂等键冲突
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:联系方式纠错申请
+        ...
 
     async def update_status(
         self, user_id: str, status: str, actor_id: str, now: datetime
-    ) -> ContactRecord: ...
+    ) -> ContactRecord:
+        # 功能:修改联系方式业务状态并记录管理员审计事件
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     status: 管理员指定的新联系方式业务状态
+        #     actor_id: 本次变更操作者的标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
+        ...
 
-    async def verify_change(self, user_id: str, actor_id: str, now: datetime) -> ContactRecord: ...
+    async def verify_change(self, user_id: str, actor_id: str, now: datetime) -> ContactRecord:
+        # 功能:记录管理员对联系方式真实变更的核验
+        # 参数:
+        #     self: 当前联系方式与纠错申请仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     actor_id: 本次变更操作者的标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
+        ...
 
 
 class InMemoryContactRepository:
     def __init__(self) -> None:
+        # 功能:初始化联系方式的InMemoryContactRepository对象的状态存储
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        # 返回:无返回值。
         self.records: dict[str, ContactRecord] = {}
         self.prompt_exposures: set[tuple[str, str]] = set()
         self.corrections: dict[str, CorrectionRequest] = {}
@@ -108,6 +212,13 @@ class InMemoryContactRepository:
         idempotency_key: str,
         now: datetime,
     ) -> bool:
+        # 功能:幂等保存用户联系方式引导曝光来源与分组
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:是否为用户首次成功登记引导曝光
         del now
         async with self._lock:
             key = (user_id, idempotency_key)
@@ -117,15 +228,35 @@ class InMemoryContactRepository:
             return True
 
     async def has_prompt_exposure(self, user_id: str) -> bool:
+        # 功能:查询用户是否已展示过联系方式引导
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:该用户是否已有联系方式引导曝光
         return any(owner == user_id for owner, _ in self.prompt_exposures)
 
     async def get_contact(self, user_id: str) -> ContactRecord | None:
+        # 功能:读取当前用户联系方式状态
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:加密联系方式与变更状态记录;不存在或无候选时返回None
         return self.records.get(user_id)
 
     async def get_contacts(self, user_ids: tuple[str, ...]) -> tuple[ContactRecord, ...]:
+        # 功能:批量读取用户联系方式记录并保持输入顺序
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_ids: 需要批量查询联系方式的用户公开标识序列
+        # 返回:加密联系方式与变更状态记录集合,保持输入的用户顺序
         return tuple(self.records[user_id] for user_id in user_ids if user_id in self.records)
 
     async def find_user_by_hmac(self, lookup_hmac: bytes) -> str | None:
+        # 功能:按微信号检索摘要查找所属用户
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     lookup_hmac: 标准化微信号的不可逆检索摘要
+        # 返回:微信联系方式所属用户公开标识;未找到时为None
         for user_id, record in self.records.items():
             if record.wechat_id_hmac is not None and hmac.compare_digest(
                 record.wechat_id_hmac, lookup_hmac
@@ -142,6 +273,16 @@ class InMemoryContactRepository:
         source: str,
         now: datetime,
     ) -> ContactRecord:
+        # 功能:保存联系方式并限制真实变更次数与纠错状态
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     ciphertext: 待解密的敏感字段密文字节
+        #     lookup_hmac: 标准化微信号的不可逆检索摘要
+        #     consent_version: 用户保存联系方式时同意的隐私条款版本
+        #     source: 用户保存微信联系方式的来源页面或入口
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
         async with self._lock:
             record = self.records.get(user_id)
             if record is None:
@@ -199,6 +340,12 @@ class InMemoryContactRepository:
             return record
 
     async def withdraw(self, user_id: str, now: datetime) -> ContactRecord:
+        # 功能:撤回联系方式并删除加密内容与检索摘要
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
         async with self._lock:
             record = self.records.get(user_id)
             if record is None:
@@ -236,6 +383,13 @@ class InMemoryContactRepository:
     async def create_correction(
         self, user_id: str, reason: str, now: datetime
     ) -> CorrectionRequest:
+        # 功能:创建联系方式纠错申请并限制重复有效申请
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     reason: 撤销、纠错或反馈异议的业务原因说明
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:联系方式纠错申请
         async with self._lock:
             if any(
                 item.user_id == user_id and item.status in {"PENDING", "PROCESSING"}
@@ -256,9 +410,20 @@ class InMemoryContactRepository:
     async def list_corrections(
         self, status: str | None, page: int, page_size: int
     ) -> tuple[tuple[AdminCorrectionRecord, ...], int]:
+        # 功能:分页筛选管理员可见的联系方式纠错申请
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     status: 纠错申请状态筛选条件; None表示不按状态筛选
+        #     page: 管理端纠错申请列表的页码
+        #     page_size: 管理端纠错申请每页最多返回的记录数
+        # 返回:本页纠错申请记录集合及符合条件的总记录数量
         corrections = [
             item for item in self.corrections.values() if status is None or item.status == status
         ]
+        # 匿名函数: key按创建时间与公开标识确定纠错申请的倒序排列
+        # 参数:
+        #     item: 当前待排序的联系方式纠错申请记录
+        # 返回: 创建时间和公开标识组成的排序元组; 时间为空时采用UTC最小时间
         corrections.sort(
             key=lambda item: (item.created_at or datetime.min.replace(tzinfo=UTC), item.public_id),
             reverse=True,
@@ -270,6 +435,11 @@ class InMemoryContactRepository:
         return records, len(corrections)
 
     async def get_correction(self, correction_id: str) -> AdminCorrectionRecord | None:
+        # 功能:读取联系方式纠错申请的管理端详情
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     correction_id: 联系方式纠错申请的公开标识
+        # 返回:管理端纠错申请与用户关联记录;不存在或无候选时返回None
         correction = self.corrections.get(correction_id)
         return self._admin_correction(correction) if correction is not None else None
 
@@ -282,6 +452,16 @@ class InMemoryContactRepository:
         request_hash: str,
         now: datetime,
     ) -> CorrectionRequest:
+        # 功能:幂等处理管理员的联系方式纠错批准或拒绝决定
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     correction_id: 联系方式纠错申请的公开标识
+        #     decision: 管理员对纠错申请作出的批准或拒绝决定
+        #     actor_id: 本次变更操作者的标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     request_hash: 纠错决定请求内容摘要,用于识别幂等键冲突
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:联系方式纠错申请
         async with self._lock:
             idempotency_scope = (actor_id, idempotency_key)
             previous = self.decision_idempotency.get(idempotency_scope)
@@ -317,6 +497,14 @@ class InMemoryContactRepository:
     async def update_status(
         self, user_id: str, status: str, actor_id: str, now: datetime
     ) -> ContactRecord:
+        # 功能:修改联系方式业务状态并记录管理员审计事件
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     status: 管理员指定的新联系方式业务状态
+        #     actor_id: 本次变更操作者的标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
         async with self._lock:
             record = self._required(user_id)
             record.contact_status = status
@@ -325,6 +513,11 @@ class InMemoryContactRepository:
             return record
 
     def _admin_correction(self, correction: CorrectionRequest) -> AdminCorrectionRecord:
+        # 功能:组装管理员查看的联系方式纠错记录与时间线
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     correction: 待转换或审核的联系方式纠错申请
+        # 返回:管理端纠错申请与用户关联记录
         contact = self.records.get(correction.user_id)
         juya_number, nickname = self.admin_identities.get(
             correction.user_id, (correction.user_id, None)
@@ -358,6 +551,13 @@ class InMemoryContactRepository:
         )
 
     async def verify_change(self, user_id: str, actor_id: str, now: datetime) -> ContactRecord:
+        # 功能:记录管理员对联系方式真实变更的核验
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     actor_id: 本次变更操作者的标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
         async with self._lock:
             record = self._required(user_id)
             record.change_pending = False
@@ -368,6 +568,11 @@ class InMemoryContactRepository:
             return record
 
     def _required(self, user_id: str) -> ContactRecord:
+        # 功能:读取用户联系方式记录并在不存在时抛出业务异常
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:加密联系方式与变更状态记录
         record = self.records.get(user_id)
         if record is None:
             raise AppError("CONTACT_NOT_FOUND", "联系方式不存在", 404)
@@ -381,16 +586,33 @@ class InMemoryContactRepository:
         actor_id: str,
         now: datetime,
     ) -> None:
+        # 功能:记录联系方式变更的操作者与审计事件
+        # 参数:
+        #     self: 当前联系方式的InMemoryContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     event_type: 统计或发件箱事件的业务类别
+        #     actor_type: 本次变更操作者的角色类别
+        #     actor_id: 本次变更操作者的标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         self.audit_events.append(ContactAuditEvent(user_id, event_type, actor_type, actor_id, now))
 
 
 def _database_datetime(value: datetime) -> datetime:
+    # 功能:将时间转换为数据库保存的无时区UTC时间
+    # 参数:
+    #     value: 待转换时区的必填数据库或业务时间
+    # 返回:转换后的无时区UTC时间
     if value.tzinfo is None:
         return value
     return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def _utc_datetime(value: datetime | None) -> datetime | None:
+    # 功能:将数据库时间统一为带UTC时区的时间并保留空值
+    # 参数:
+    #     value: 待转换时区的数据库或业务时间;空值保留为空
+    # 返回:带UTC时区的时间;原值为空时返回None
     if value is None:
         return None
     if value.tzinfo is None:
@@ -400,6 +622,11 @@ def _utc_datetime(value: datetime | None) -> datetime | None:
 
 class SQLAlchemyContactRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        # 功能:初始化联系方式的SQLAlchemyContactRepository对象并保存所需依赖与配置
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     session_factory: 创建数据库事务会话的异步工厂
+        # 返回:无返回值。
         self._session_factory = session_factory
 
     async def record_prompt_exposure(
@@ -408,6 +635,13 @@ class SQLAlchemyContactRepository:
         idempotency_key: str,
         now: datetime,
     ) -> bool:
+        # 功能:幂等保存用户联系方式引导曝光来源与分组
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:是否为用户首次成功登记引导曝光
         async with self._session_factory() as session, session.begin():
             internal_id = await self._lock_user(session, user_id)
             if await self._has_prompt_exposure(session, user_id):
@@ -422,11 +656,21 @@ class SQLAlchemyContactRepository:
             )
 
     async def has_prompt_exposure(self, user_id: str) -> bool:
+        # 功能:查询用户是否已展示过联系方式引导
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:该用户是否已有联系方式引导曝光
         async with self._session_factory() as session:
             return await self._has_prompt_exposure(session, user_id)
 
     @staticmethod
     async def _has_prompt_exposure(session: AsyncSession, user_id: str) -> bool:
+        # 功能:查询用户是否已产生联系方式引导曝光记录
+        # 参数:
+        #     session: 异步数据库会话
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:该用户是否已有联系方式引导曝光
         exposed = await session.scalar(
             text(
                 "SELECT 1 FROM analytics_event e JOIN user_account u ON u.id=e.user_id "
@@ -437,10 +681,20 @@ class SQLAlchemyContactRepository:
         return exposed is not None
 
     async def get_contact(self, user_id: str) -> ContactRecord | None:
+        # 功能:读取当前用户联系方式状态
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:加密联系方式与变更状态记录;不存在或无候选时返回None
         async with self._session_factory() as session:
             return await self._load_contact(session, user_id)
 
     async def get_contacts(self, user_ids: tuple[str, ...]) -> tuple[ContactRecord, ...]:
+        # 功能:批量读取用户联系方式记录并保持输入顺序
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     user_ids: 需要批量查询联系方式的用户公开标识序列
+        # 返回:加密联系方式与变更状态记录集合,保持输入的用户顺序
         if not user_ids:
             return ()
         placeholders: list[str] = []
@@ -472,6 +726,11 @@ class SQLAlchemyContactRepository:
         return tuple(by_user_id[user_id] for user_id in user_ids if user_id in by_user_id)
 
     async def find_user_by_hmac(self, lookup_hmac: bytes) -> str | None:
+        # 功能:按微信号检索摘要查找所属用户
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     lookup_hmac: 标准化微信号的不可逆检索摘要
+        # 返回:微信联系方式所属用户公开标识;未找到时为None
         async with self._session_factory() as session:
             return cast(
                 str | None,
@@ -494,6 +753,16 @@ class SQLAlchemyContactRepository:
         source: str,
         now: datetime,
     ) -> ContactRecord:
+        # 功能:保存联系方式并限制真实变更次数与纠错状态
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     ciphertext: 待解密的敏感字段密文字节
+        #     lookup_hmac: 标准化微信号的不可逆检索摘要
+        #     consent_version: 用户保存联系方式时同意的隐私条款版本
+        #     source: 用户保存微信联系方式的来源页面或入口
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
         async with self._session_factory() as session, session.begin():
             internal_id = await self._lock_user(session, user_id)
             record = await self._load_contact(session, user_id, for_update=True)
@@ -592,6 +861,12 @@ class SQLAlchemyContactRepository:
             return updated
 
     async def withdraw(self, user_id: str, now: datetime) -> ContactRecord:
+        # 功能:撤回联系方式并删除加密内容与检索摘要
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
         async with self._session_factory() as session, session.begin():
             internal_id = await self._lock_user(session, user_id)
             record = await self._load_contact(session, user_id, for_update=True)
@@ -641,6 +916,13 @@ class SQLAlchemyContactRepository:
     async def create_correction(
         self, user_id: str, reason: str, now: datetime
     ) -> CorrectionRequest:
+        # 功能:创建联系方式纠错申请并限制重复有效申请
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     reason: 撤销、纠错或反馈异议的业务原因说明
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:联系方式纠错申请
         public_id = new_ulid(now)
         try:
             async with self._session_factory() as session, session.begin():
@@ -665,6 +947,13 @@ class SQLAlchemyContactRepository:
     async def list_corrections(
         self, status: str | None, page: int, page_size: int
     ) -> tuple[tuple[AdminCorrectionRecord, ...], int]:
+        # 功能:分页筛选管理员可见的联系方式纠错申请
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     status: 纠错申请状态筛选条件; None表示不按状态筛选
+        #     page: 管理端纠错申请列表的页码
+        #     page_size: 管理端纠错申请每页最多返回的记录数
+        # 返回:本页纠错申请记录集合及符合条件的总记录数量
         where = " WHERE r.status = :status" if status is not None else ""
         parameters: dict[str, object] = {
             "status": status,
@@ -692,6 +981,11 @@ class SQLAlchemyContactRepository:
         return tuple(self._admin_correction_from_row(row, ()) for row in rows), total
 
     async def get_correction(self, correction_id: str) -> AdminCorrectionRecord | None:
+        # 功能:读取联系方式纠错申请的管理端详情
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     correction_id: 联系方式纠错申请的公开标识
+        # 返回:管理端纠错申请与用户关联记录;不存在或无候选时返回None
         async with self._session_factory() as session:
             row = (
                 (
@@ -717,6 +1011,16 @@ class SQLAlchemyContactRepository:
         request_hash: str,
         now: datetime,
     ) -> CorrectionRequest:
+        # 功能:幂等处理管理员的联系方式纠错批准或拒绝决定
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     correction_id: 联系方式纠错申请的公开标识
+        #     decision: 管理员对纠错申请作出的批准或拒绝决定
+        #     actor_id: 本次变更操作者的标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     request_hash: 纠错决定请求内容摘要,用于识别幂等键冲突
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:联系方式纠错申请
         try:
             async with self._session_factory() as session, session.begin():
                 replay = await self._load_decision_by_key(
@@ -804,6 +1108,14 @@ class SQLAlchemyContactRepository:
     async def update_status(
         self, user_id: str, status: str, actor_id: str, now: datetime
     ) -> ContactRecord:
+        # 功能:修改联系方式业务状态并记录管理员审计事件
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     status: 管理员指定的新联系方式业务状态
+        #     actor_id: 本次变更操作者的标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
         async with self._session_factory() as session, session.begin():
             internal_id = await self._lock_user(session, user_id)
             if await self._load_contact(session, user_id, for_update=True) is None:
@@ -828,6 +1140,13 @@ class SQLAlchemyContactRepository:
             return updated
 
     async def verify_change(self, user_id: str, actor_id: str, now: datetime) -> ContactRecord:
+        # 功能:记录管理员对联系方式真实变更的核验
+        # 参数:
+        #     self: 当前联系方式的SQLAlchemyContactRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     actor_id: 本次变更操作者的标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:加密联系方式与变更状态记录
         async with self._session_factory() as session, session.begin():
             internal_id = await self._lock_user(session, user_id)
             record = await self._load_contact(session, user_id, for_update=True)
@@ -860,6 +1179,11 @@ class SQLAlchemyContactRepository:
 
     @staticmethod
     async def _lock_user(session: AsyncSession, public_id: str) -> int:
+        # 功能:锁定用户账号行并取得数据库内部主键
+        # 参数:
+        #     session: 异步数据库会话
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:已锁定用户账号的数据库内部主键
         internal_id = await session.scalar(
             text("SELECT id FROM user_account WHERE public_id = :public_id FOR UPDATE"),
             {"public_id": public_id},
@@ -872,6 +1196,12 @@ class SQLAlchemyContactRepository:
     async def _load_contact(
         session: AsyncSession, public_id: str, *, for_update: bool = False
     ) -> ContactRecord | None:
+        # 功能:读取指定用户的联系方式记录并按需加锁
+        # 参数:
+        #     session: 异步数据库会话
+        #     public_id: 当前操作所属用户账号的公开标识
+        #     for_update: 是否锁定查询记录以防止并发状态变更
+        # 返回:加密联系方式与变更状态记录;不存在或无候选时返回None
         suffix = " FOR UPDATE" if for_update else ""
         row = (
             (
@@ -896,6 +1226,10 @@ class SQLAlchemyContactRepository:
 
     @staticmethod
     def _contact_from_row(row: RowMapping) -> ContactRecord:
+        # 功能:将联系方式数据库行转换为领域记录
+        # 参数:
+        #     row: 查询返回的联系方式数据库字段映射
+        # 返回:加密联系方式与变更状态记录
         return ContactRecord(
             user_id=row["public_id"],
             wechat_id_ciphertext=row["wechat_id_ciphertext"],
@@ -914,6 +1248,10 @@ class SQLAlchemyContactRepository:
 
     @staticmethod
     def _admin_correction_select() -> str:
+        # 功能:生成纠错申请及用户关联信息的查询语句
+        # 参数:
+        #     无形参。
+        # 返回:纠错详情数据库查询SQL文本
         return (
             "SELECT r.id AS correction_internal_id, r.public_id AS correction_public_id, "
             "r.user_id AS internal_user_id, r.reason, r.status, r.created_at, r.processed_at, "
@@ -926,12 +1264,21 @@ class SQLAlchemyContactRepository:
 
     @staticmethod
     def _admin_order_limit() -> str:
+        # 功能:生成纠错申请列表的排序和分页限制语句
+        # 参数:
+        #     无形参。
+        # 返回:纠错列表排序和分页SQL片段
         return " ORDER BY r.created_at DESC, r.id DESC LIMIT :limit OFFSET :offset"
 
     @staticmethod
     def _admin_correction_from_row(
         row: RowMapping, timeline: tuple[ContactTimelineEvent, ...]
     ) -> AdminCorrectionRecord:
+        # 功能:将纠错申请数据库行与时间线转换为管理端投影
+        # 参数:
+        #     row: 查询返回的联系方式数据库字段映射
+        #     timeline: 联系方式纠错详情包含的审计时间线
+        # 返回:管理端纠错申请与用户关联记录
         return AdminCorrectionRecord(
             id=row["correction_public_id"],
             user_id=row["user_public_id"],
@@ -949,6 +1296,11 @@ class SQLAlchemyContactRepository:
     async def _load_timeline(
         session: AsyncSession, user_id: int
     ) -> tuple[ContactTimelineEvent, ...]:
+        # 功能:读取用户联系方式的状态变更时间线
+        # 参数:
+        #     session: 异步数据库会话
+        #     user_id: 业务数据库中的用户内部数值主键
+        # 返回:按时间排列的联系方式状态变更事件集合
         rows = (
             (
                 await session.execute(
@@ -984,6 +1336,13 @@ class SQLAlchemyContactRepository:
         *,
         for_update: bool = False,
     ) -> RowMapping | None:
+        # 功能:按管理员和幂等键查找已处理的纠错决定
+        # 参数:
+        #     session: 异步数据库会话
+        #     actor_id: 本次变更操作者的标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     for_update: 是否锁定查询记录以防止并发状态变更
+        # 返回:数据库查询行字段映射;不存在或无候选时返回None
         suffix = " FOR UPDATE" if for_update else ""
         return (
             (
@@ -1007,6 +1366,12 @@ class SQLAlchemyContactRepository:
     def _validate_replay(
         row: RowMapping, *, correction_id: str, request_hash: str
     ) -> CorrectionRequest:
+        # 功能:校验重复纠错决定的请求内容与原幂等记录一致
+        # 参数:
+        #     row: 查询返回的联系方式数据库字段映射
+        #     correction_id: 联系方式纠错申请的公开标识
+        #     request_hash: 纠错决定请求内容摘要,用于识别幂等键冲突
+        # 返回:联系方式纠错申请
         if (
             row["correction_public_id"] != correction_id
             or row["decision_request_hash"] != request_hash
@@ -1034,6 +1399,18 @@ class SQLAlchemyContactRepository:
         emit_analytics: bool = True,
         analytics_payload: dict[str, object] | None = None,
     ) -> None:
+        # 功能:写入联系方式状态历史并按需同步匿名统计事件
+        # 参数:
+        #     session: 异步数据库会话
+        #     user_id: 业务数据库中的用户内部数值主键
+        #     status: 本次联系方式变更完成后的业务状态,写入状态历史
+        #     actor_type: 本次变更操作者的角色类别
+        #     actor_id: 本次变更操作者的标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        #     note: 联系方式审计事件的说明或业务动作代码
+        #     emit_analytics: 是否同时写入联系方式匿名统计事件
+        #     analytics_payload: 随联系方式状态变更写入的匿名统计字段
+        # 返回:无返回值。
         event_type = {
             "CONTACT_CREATED": "CONTACT_SUBMITTED",
             "CONTACT_CHANGED": "CONTACT_CHANGED",

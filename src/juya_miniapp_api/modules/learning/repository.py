@@ -25,7 +25,17 @@ class LearningRepository(Protocol):
         client_sequence: int,
         position: ReadingPosition,
         now: datetime,
-    ) -> LearningProgress: ...
+    ) -> LearningProgress:
+        # 功能:按客户端序号保存场景阅读位置并拒绝旧请求覆盖
+        # 参数:
+        #     self: 当前场景阅读进度与完成事件仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        #     client_sequence: 客户端递增的进度请求序号,防止旧位置覆盖新位置
+        #     position: 当前场景词条标识与阅读偏移位置
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:场景阅读位置、请求序号与学习时间
+        ...
 
     async def complete(
         self,
@@ -33,11 +43,24 @@ class LearningRepository(Protocol):
         scene_id: str,
         idempotency_key: str,
         now: datetime,
-    ) -> CompletionResult: ...
+    ) -> CompletionResult:
+        # 功能:幂等完成场景学习并记录完成事件与北京时间打卡
+        # 参数:
+        #     self: 当前场景阅读进度与完成事件仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:学习进度、首次完成标记与打卡日期
+        ...
 
 
 class InMemoryLearningRepository:
     def __init__(self) -> None:
+        # 功能:初始化场景学习的InMemoryLearningRepository对象的状态存储
+        # 参数:
+        #     self: 当前场景学习的InMemoryLearningRepository实例
+        # 返回:无返回值。
         self.progress: dict[tuple[str, str], LearningProgress] = {}
         self.completion_events: dict[tuple[str, str], str] = {}
         self.idempotency_keys: dict[tuple[str, str], tuple[str, str]] = {}
@@ -52,6 +75,15 @@ class InMemoryLearningRepository:
         position: ReadingPosition,
         now: datetime,
     ) -> LearningProgress:
+        # 功能:按客户端序号保存场景阅读位置并拒绝旧请求覆盖
+        # 参数:
+        #     self: 当前场景学习的InMemoryLearningRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        #     client_sequence: 客户端递增的进度请求序号,防止旧位置覆盖新位置
+        #     position: 当前场景词条标识与阅读偏移位置
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:场景阅读位置、请求序号与学习时间
         async with self._lock:
             key = (user_id, scene_id)
             current = self.progress.get(key)
@@ -77,6 +109,14 @@ class InMemoryLearningRepository:
         idempotency_key: str,
         now: datetime,
     ) -> CompletionResult:
+        # 功能:幂等完成场景学习并记录完成事件与北京时间打卡
+        # 参数:
+        #     self: 当前场景学习的InMemoryLearningRepository实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:学习进度、首次完成标记与打卡日期
         async with self._lock:
             key = (user_id, scene_id)
             current = self.progress.get(key)
@@ -113,12 +153,20 @@ class InMemoryLearningRepository:
 
 
 def _database_datetime(value: datetime) -> datetime:
+    # 功能:将时间转换为数据库保存的无时区UTC时间
+    # 参数:
+    #     value: 待转换时区的必填数据库或业务时间
+    # 返回:转换后的无时区UTC时间
     if value.tzinfo is None:
         return value
     return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def _utc_datetime(value: datetime | None) -> datetime | None:
+    # 功能:将数据库时间统一为带UTC时区的时间并保留空值
+    # 参数:
+    #     value: 待转换时区的数据库或业务时间;空值保留为空
+    # 返回:带UTC时区的时间;原值为空时返回None
     if value is None:
         return None
     if value.tzinfo is None:
@@ -128,6 +176,11 @@ def _utc_datetime(value: datetime | None) -> datetime | None:
 
 class SQLAlchemyLearningRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        # 功能:初始化SQL场景学习进度仓库并保存所需依赖与配置
+        # 参数:
+        #     self: 当前SQL场景学习进度仓库实例
+        #     session_factory: 创建数据库事务会话的异步工厂
+        # 返回:无返回值。
         self._session_factory = session_factory
 
     async def save_progress(
@@ -140,6 +193,16 @@ class SQLAlchemyLearningRepository:
         *,
         is_scene_open: bool = False,
     ) -> LearningProgress:
+        # 功能:按客户端序号保存场景阅读位置并拒绝旧请求覆盖
+        # 参数:
+        #     self: 当前SQL场景学习进度仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        #     client_sequence: 客户端递增的进度请求序号,防止旧位置覆盖新位置
+        #     position: 当前场景词条标识与阅读偏移位置
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        #     is_scene_open: 场景是否属于当前开放内容配置
+        # 返回:场景阅读位置、请求序号与学习时间
         async with self._session_factory() as session, session.begin():
             internal_id = await self._lock_user(session, user_id)
             current = await self._load_progress(session, user_id, scene_id, for_update=True)
@@ -211,6 +274,14 @@ class SQLAlchemyLearningRepository:
         idempotency_key: str,
         now: datetime,
     ) -> CompletionResult:
+        # 功能:幂等完成场景学习并记录完成事件与北京时间打卡
+        # 参数:
+        #     self: 当前SQL场景学习进度仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:学习进度、首次完成标记与打卡日期
         learning_day = beijing_learning_date(now)
         async with self._session_factory() as session, session.begin():
             internal_id = await self._lock_user(session, user_id)
@@ -380,10 +451,22 @@ class SQLAlchemyLearningRepository:
             return CompletionResult(progress, created, learning_day)
 
     async def get_progress(self, user_id: str, scene_id: str) -> LearningProgress | None:
+        # 功能:读取用户在指定场景的学习进度
+        # 参数:
+        #     self: 当前SQL场景学习进度仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        # 返回:场景阅读位置、请求序号与学习时间;不存在或无候选时返回None
         async with self._session_factory() as session:
             return await self._load_progress(session, user_id, scene_id)
 
     async def list_history(self, user_id: str, limit: int = 100) -> list[LearningProgress]:
+        # 功能:按最近学习时间查询用户场景进度历史
+        # 参数:
+        #     self: 当前SQL场景学习进度仓库实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:场景阅读位置、请求序号与学习时间集合
         async with self._session_factory() as session:
             rows = (
                 (
@@ -411,6 +494,13 @@ class SQLAlchemyLearningRepository:
         scene_id: str,
         now: datetime,
     ) -> None:
+        # 功能:记录用户首次开始学习开放场景的统计事件
+        # 参数:
+        #     session: 异步数据库会话
+        #     user_id: 业务数据库中的用户内部数值主键
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+        # 返回:无返回值。
         config = await session.scalar(
             text(
                 "SELECT i.config_id FROM open_scene_item i JOIN scene s ON s.id=i.scene_id "
@@ -429,6 +519,11 @@ class SQLAlchemyLearningRepository:
 
     @staticmethod
     async def _lock_user(session: AsyncSession, public_id: str) -> int:
+        # 功能:锁定用户账号行并取得数据库内部主键
+        # 参数:
+        #     session: 异步数据库会话
+        #     public_id: 当前操作所属用户账号的公开标识
+        # 返回:已锁定用户账号的数据库内部主键
         internal_id = await session.scalar(
             text("SELECT id FROM user_account WHERE public_id = :public_id FOR UPDATE"),
             {"public_id": public_id},
@@ -446,6 +541,14 @@ class SQLAlchemyLearningRepository:
         *,
         for_update: bool = False,
     ) -> LearningProgress | None:
+        # 功能:读取场景学习进度并按需锁定记录
+        # 参数:
+        #     cls: 当前SQLAlchemyLearningRepository类型,调用类级别的记录转换方法
+        #     session: 异步数据库会话
+        #     public_id: 当前操作所属用户账号的公开标识
+        #     scene_id: 需要授权、学习或查询的场景公开标识
+        #     for_update: 是否锁定查询记录以防止并发状态变更
+        # 返回:场景阅读位置、请求序号与学习时间;不存在或无候选时返回None
         suffix = " FOR UPDATE" if for_update else ""
         row = (
             (
@@ -467,6 +570,10 @@ class SQLAlchemyLearningRepository:
 
     @staticmethod
     def _from_row(row: RowMapping) -> LearningProgress:
+        # 功能:将数据库查询行转换为场景阅读位置、请求序号与学习时间
+        # 参数:
+        #     row: 查询返回的场景学习数据库字段映射
+        # 返回:场景阅读位置、请求序号与学习时间
         raw_position = row["position"]
         payload = json.loads(raw_position) if isinstance(raw_position, str) else raw_position
         started_at = _utc_datetime(row["started_at"])

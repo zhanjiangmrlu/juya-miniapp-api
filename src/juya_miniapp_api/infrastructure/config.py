@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     oss_credentials_expires_at: datetime | None = None
 
     def validate_oss_configuration(self) -> None:
+        # 功能:校验OSS真实配置、环境桶隔离与凭证完整性
+        # 参数:
+        #     self: 当前应用运行配置实例
+        # 返回:无返回值。
         if self.oss_expected_bucket and self.oss_bucket != self.oss_expected_bucket:
             raise RuntimeError("OSS bucket does not match the expected environment bucket")
         if not self.oss_region or not self.oss_bucket or not self.oss_expected_bucket:
@@ -56,6 +60,10 @@ class Settings(BaseSettings):
                 raise RuntimeError("OSS STS credentials require a future UTC expiration")
 
     def application_configured(self) -> bool:
+        # 功能:检查生产运行必需的应用配置是否齐备
+        # 参数:
+        #     self: 当前应用运行配置实例
+        # 返回:当前环境必需的应用配置是否完整
         values = (
             self.database_url,
             self.redis_url,

@@ -23,6 +23,10 @@ from juya_miniapp_api.shared.ids import new_ulid
 async def test_transaction_events_are_idempotent_paginated_and_survive_anonymized_deletion() -> (
     None
 ):
+    # 功能:验证事务统计事件幂等可分页且匿名化注销后仍保留
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     url = os.getenv("JUYA_TEST_DATABASE_URL")
     if not url:
         pytest.skip("isolated MySQL required")
@@ -89,6 +93,10 @@ async def test_transaction_events_are_idempotent_paginated_and_survive_anonymize
         assert len(pinned.sources) == 2
 
         async def user() -> str:
+            # 功能:提供路由测试的当前用户公开标识
+            # 参数:
+            #     无形参。
+            # 返回:测试使用的用户公开标识
             return public
 
         app = FastAPI()

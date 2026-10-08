@@ -11,6 +11,14 @@ from juya_miniapp_api.main import create_app
 
 
 def test_feedback_upload_has_v4_fields_bound_to_exact_key_and_mime() -> None:
+    # 功能:验证反馈上传V4字段绑定精确对象键与MIME
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
+    # 匿名函数: clock测试时钟返回固定操作时间以稳定签名与有效期断言
+    # 参数:
+    #     无形参。
+    # 返回: 测试预设的带UTC时区时间
     service = OssUploadService(
         endpoint="https://oss-cn-shenzhen.aliyuncs.com",
         bucket="juya-test",
@@ -32,11 +40,19 @@ def test_feedback_upload_has_v4_fields_bound_to_exact_key_and_mime() -> None:
 
 
 def test_production_startup_rejects_missing_real_oss_configuration() -> None:
+    # 功能:验证生产启动拒绝缺失真实OSS配置
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     with pytest.raises(RuntimeError, match="OSS"):
         create_app(Settings(environment="production"))
 
 
 def test_test_configuration_cannot_select_production_bucket() -> None:
+    # 功能:验证测试环境不能选择生产存储桶
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     settings = Settings(
         environment="test",
         oss_bucket="juya",
@@ -48,6 +64,10 @@ def test_test_configuration_cannot_select_production_bucket() -> None:
 
 
 def test_empty_optional_sts_expiration_is_treated_as_unset(monkeypatch) -> None:
+    # 功能:验证可选STS过期时间为空时视为未配置
+    # 参数:
+    #     monkeypatch: pytest提供的临时属性或环境变量替换工具
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     monkeypatch.setenv("JUYA_OSS_CREDENTIALS_EXPIRES_AT", "")
     assert Settings().oss_credentials_expires_at is None
 
@@ -55,6 +75,11 @@ def test_empty_optional_sts_expiration_is_treated_as_unset(monkeypatch) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("prefix", ["JUYA_OSS_", "OSS_"])
 async def test_runtime_rotates_complete_environment_sts_bundle(monkeypatch, prefix: str) -> None:
+    # 功能:验证运行时完整轮换环境中的STS凭证组合
+    # 参数:
+    #     monkeypatch: pytest提供的临时属性或环境变量替换工具
+    #     prefix: 测试上传对象所在的OSS目录前缀
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     from fastapi import FastAPI
 
     from juya_miniapp_api.api import runtime as wiring
@@ -70,6 +95,14 @@ async def test_runtime_rotates_complete_environment_sts_bundle(monkeypatch, pref
     captured: list[OssUploadService] = []
 
     def capture(**kwargs: Any) -> OssUploadService:
+        # 功能:在测试中收集测试中产生的事件或调用信息供断言
+        # 参数:
+        #     kwargs: OSS测试调用中按SDK接口传入的关键字参数
+        # 返回:用户图片直传凭证服务
+        # 匿名函数: clock测试时钟返回固定操作时间以稳定签名与有效期断言
+        # 参数:
+        #     无形参。
+        # 返回: 测试预设的带UTC时区时间
         service = OssUploadService(**kwargs, clock=lambda: now)
         captured.append(service)
         return service

@@ -4,6 +4,10 @@ from juya_miniapp_api.infrastructure.observability.logging import SensitiveDataF
 
 
 def test_oss_form_fields_and_urls_are_removed_from_log_messages() -> None:
+    # 功能:验证OSS表单凭证和签名URL不会泄漏到日志
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     record = logging.LogRecord(
         "oss",
         logging.ERROR,
@@ -25,6 +29,10 @@ def test_oss_form_fields_and_urls_are_removed_from_log_messages() -> None:
 
 
 def test_oss_sdk_tracebacks_are_not_emitted() -> None:
+    # 功能:验证OSS SDK异常堆栈不会被输出
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     error = RuntimeError("private-credential")
     record = logging.LogRecord(
         "alibabacloud_oss_v2.client",

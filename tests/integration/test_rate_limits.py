@@ -9,6 +9,10 @@ from juya_miniapp_api.infrastructure.redis.rate_limit import RedisRateLimiter
 
 @pytest.mark.asyncio
 async def test_redis_rate_limit_is_atomic_and_scoped() -> None:
+    # 功能:验证Redis限流原子计数且按业务范围隔离
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     redis_url = os.environ.get("JUYA_TEST_REDIS_URL")
     if not redis_url:
         pytest.skip("JUYA_TEST_REDIS_URL is required for Redis integration tests")

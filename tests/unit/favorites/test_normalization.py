@@ -13,6 +13,10 @@ USER_ID = "01K00000000000000000000001"
 
 
 def test_normalization_is_unicode_case_and_space_only_without_lemmatization() -> None:
+    # 功能:验证收藏标准化仅统一Unicode、大小写与空白且不做词形归并
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     assert normalize_favorite_key("  \uff28\uff45\uff4c\uff4c\uff4f   WORLD  ") == "hello world"
     assert normalize_favorite_key("Running") == "running"
     assert normalize_favorite_key("run") == "run"
@@ -21,6 +25,10 @@ def test_normalization_is_unicode_case_and_space_only_without_lemmatization() ->
 
 @pytest.mark.asyncio
 async def test_same_normalized_entry_merges_sources_and_keeps_snapshots() -> None:
+    # 功能:验证相同标准化词条合并来源且保留快照
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repository = InMemoryFavoriteRepository()
     service = FavoriteService(repository)
 
@@ -60,6 +68,10 @@ async def test_same_normalized_entry_merges_sources_and_keeps_snapshots() -> Non
 
 @pytest.mark.asyncio
 async def test_delete_cascades_sources_and_review_has_no_card_limit() -> None:
+    # 功能:验证删除收藏级联清理来源且复习无卡片数量上限
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repository = InMemoryFavoriteRepository()
     service = FavoriteService(repository)
     favorite = await service.favorite(

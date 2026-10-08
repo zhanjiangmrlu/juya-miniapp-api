@@ -16,9 +16,17 @@ SECRET = b"s" * 32
 
 @pytest.mark.asyncio
 async def test_client_uses_timeouts_hmac_headers_and_typed_access_contract() -> None:
+    # 功能:验证客户端设置超时、内部签名头并解析有类型的访问契约
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     captured: list[httpx.Request] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        # 功能:模拟HTTP上游响应以验证客户端设置超时、内部签名头并解析有类型的访问契约
+        # 参数:
+        #     request: HTTP测试或上游请求对象
+        # 返回:上游HTTP响应对象
         captured.append(request)
         return httpx.Response(
             200,
@@ -35,6 +43,14 @@ async def test_client_uses_timeouts_hmac_headers_and_typed_access_contract() -> 
         )
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://admin-api")
+    # 匿名函数: clock测试时钟返回固定操作时间以稳定签名与有效期断言
+    # 参数:
+    #     无形参。
+    # 返回: 测试预设的带UTC时区时间
+    # 匿名函数: nonce_factory提供可断言的固定内部签名随机数
+    # 参数:
+    #     无形参。
+    # 返回: 固定的nonce-1测试字符串
     client = AdminApiClient(
         http,
         secret=SECRET,
@@ -63,9 +79,17 @@ async def test_client_uses_timeouts_hmac_headers_and_typed_access_contract() -> 
 
 @pytest.mark.asyncio
 async def test_get_and_idempotent_command_retry_but_plain_post_does_not() -> None:
+    # 功能:验证读取与幂等命令可重试且普通POST不自动重试
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     attempts: dict[str, int] = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        # 功能:模拟HTTP上游响应以验证读取与幂等命令可重试且普通POST不自动重试
+        # 参数:
+        #     request: HTTP测试或上游请求对象
+        # 返回:上游HTTP响应对象
         path = request.url.path
         attempts[path] = attempts.get(path, 0) + 1
         if attempts[path] == 1:
@@ -90,6 +114,14 @@ async def test_get_and_idempotent_command_retry_but_plain_post_does_not() -> Non
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://admin-api")
     nonces = iter(("n1", "n2", "n3", "n4", "n5"))
+    # 匿名函数: clock测试时钟返回固定操作时间以稳定签名与有效期断言
+    # 参数:
+    #     无形参。
+    # 返回: 测试预设的带UTC时区时间
+    # 匿名函数: nonce_factory按测试序列为每次内部调用提供不同随机数
+    # 参数:
+    #     无形参。
+    # 返回: 随机数迭代器中的下一项
     client = AdminApiClient(
         http, secret=SECRET, clock=lambda: NOW, nonce_factory=lambda: next(nonces)
     )

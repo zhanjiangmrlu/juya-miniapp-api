@@ -12,6 +12,10 @@ NOW = datetime(2026, 10, 1, tzinfo=UTC)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cards", [[], ["missing"], [1], ["x", "x"]])
 async def test_invalid_cards_never_create_review_or_checkin(cards: list[object]) -> None:
+    # 功能:验证无效卡片不创建复习或打卡记录
+    # 参数:
+    #     cards: 待核验归属或固定到复习会话的收藏标识集合
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repository = InMemoryFavoriteRepository()
     service = FavoriteService(repository)
     with pytest.raises(AppError):
@@ -22,6 +26,10 @@ async def test_invalid_cards_never_create_review_or_checkin(cards: list[object])
 
 @pytest.mark.asyncio
 async def test_review_pins_owned_cards_and_updates_only_their_review_time_once() -> None:
+    # 功能:验证复习固定本人卡片且只更新这些卡片的复习时间一次
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repository = InMemoryFavoriteRepository()
     service = FavoriteService(repository)
     cards = [
@@ -46,6 +54,10 @@ async def test_review_pins_owned_cards_and_updates_only_their_review_time_once()
 
 @pytest.mark.asyncio
 async def test_deleted_card_prevents_completion_and_checkin() -> None:
+    # 功能:验证卡片被删除后拒绝复习完成与打卡
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repository = InMemoryFavoriteRepository()
     service = FavoriteService(repository)
     card = await service.favorite("owner", "PHRASE", "hello", "h", "s", "h", "one", NOW)
@@ -58,6 +70,10 @@ async def test_deleted_card_prevents_completion_and_checkin() -> None:
 
 @pytest.mark.asyncio
 async def test_out_of_order_review_completions_do_not_move_last_reviewed_backwards() -> None:
+    # 功能:验证乱序复习完成不使最近复习时间倒退
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     repository = InMemoryFavoriteRepository()
     service = FavoriteService(repository)
     card = await service.favorite("owner", "PHRASE", "hello", "h", "s", "h", "one", NOW)

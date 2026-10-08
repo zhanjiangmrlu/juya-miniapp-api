@@ -39,6 +39,12 @@ engine.dispose()
 
 
 def export_manifest(revision_id: str, media_directory: Path, container: str) -> dict[str, Any]:
+    # 功能:从管理端导出指定发布版本的真实内容与媒体清单
+    # 参数:
+    #     revision_id: 需要访问或固定的场景发布修订标识
+    #     media_directory: 导出或加载真实音频和图片的本地目录
+    #     container: 用于导出真实发布内容的管理端容器名称
+    # 返回:发布场景契约与媒体文件路径、类型和哈希清单
     """Read revision_id in the local container and match referenced files under media_directory"""
     result = subprocess.run(
         [
@@ -99,6 +105,10 @@ def export_manifest(revision_id: str, media_directory: Path, container: str) -> 
 
 
 def main() -> None:
+    # 功能:导出真实内容并启动本地小程序API
+    # 参数:
+    #     无形参。
+    # 返回:无返回值。
     """Export a fresh non-secret management snapshot and start a loopback-only local preview"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--revision", required=True)

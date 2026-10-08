@@ -7,6 +7,11 @@ from juya_miniapp_api.main import create_app
 
 
 async def assert_source_opens(client: AsyncClient, favorite: dict) -> None:
+    # 功能:在测试中校验收藏来源链接可打开匹配发布版本的场景
+    # 参数:
+    #     client: 异步HTTP客户端
+    #     favorite: 待验证来源或序列化的收藏数据
+    # 返回:无返回值。
     """核对 client 返回的收藏 favorite 可定位且与词卡快照一致"""
     source = favorite["sources"][0]
     entry = await client.get(
@@ -25,6 +30,10 @@ async def assert_source_opens(client: AsyncClient, favorite: dict) -> None:
 
 @pytest.mark.asyncio
 async def test_default_favorite_has_reachable_published_source() -> None:
+    # 功能:验证默认收藏具有可访问的发布来源
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     """默认收藏必须携带能够返回原文的版本和完整来源"""
     app = create_app(Settings(environment="local", local_dev_mode=True))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -34,6 +43,10 @@ async def test_default_favorite_has_reachable_published_source() -> None:
 
 @pytest.mark.asyncio
 async def test_created_favorite_persists_resolved_source_snapshot() -> None:
+    # 功能:验证新收藏保存已解析的来源内容快照
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     """页面按正式请求创建收藏后列表和详情必须保留可用来源"""
     app = create_app(Settings(environment="local", local_dev_mode=True))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -81,6 +94,11 @@ async def test_created_favorite_persists_resolved_source_snapshot() -> None:
 async def test_created_favorite_rejects_unresolvable_source(
     changes: dict, expected_status: int
 ) -> None:
+    # 功能:验证新收藏拒绝不能解析的来源
+    # 参数:
+    #     changes: 测试覆盖的配置字段变更映射
+    #     expected_status: 测试请求预期得到的HTTP状态码
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     """收藏请求 changes 中无效的发布来源返回 expected_status 且不写入收藏"""
     app = create_app(Settings(environment="local", local_dev_mode=True))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

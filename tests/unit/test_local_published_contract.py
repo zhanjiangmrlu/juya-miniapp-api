@@ -8,6 +8,10 @@ from juya_miniapp_api.main import create_app
 
 @pytest.mark.asyncio
 async def test_local_published_scene_and_preview_follow_production_shapes() -> None:
+    # 功能:验证本地发布场景和预览遵循生产响应结构
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     app = create_app(Settings(environment="local", local_dev_mode=True))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         full = await client.post("/api/v1/scenes/scene-coffee-shop/open")
@@ -26,6 +30,10 @@ async def test_local_published_scene_and_preview_follow_production_shapes() -> N
 
 @pytest.mark.asyncio
 async def test_local_resources_and_entries_require_matching_revision() -> None:
+    # 功能:验证本地资源与词条要求匹配发布修订版本
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     app = create_app(Settings(environment="local", local_dev_mode=True))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         opened = (await client.post("/api/v1/scenes/scene-coffee-shop/open")).json()["scene"]
@@ -52,6 +60,10 @@ async def test_local_resources_and_entries_require_matching_revision() -> None:
 
 @pytest.mark.asyncio
 async def test_local_contact_prompt_exposure_is_idempotent() -> None:
+    # 功能:验证本地联系方式引导曝光保持幂等
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     app = create_app(Settings(environment="local", local_dev_mode=True))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         first = await client.post(

@@ -18,6 +18,10 @@ from juya_miniapp_api.modules.messages.service import MessageService
 from juya_miniapp_api.modules.users.router import UserDependency
 
 
+# 匿名函数: clock默认时钟在调用时读取当前UTC时间
+# 参数:
+#     无形参。
+# 返回: 带UTC时区的当前时间
 def create_checkins_router(
     repository: SQLAlchemyCheckinRepository,
     *,
@@ -28,12 +32,26 @@ def create_checkins_router(
     favorites: SQLAlchemyFavoriteRepository | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> APIRouter:
+    # 功能:创建并绑定打卡首页路由与业务依赖
+    # 参数:
+    #     repository: SQL用户打卡日期仓库,承载学习打卡业务操作
+    #     user_dependency: 校验登录凭证并取得当前用户标识的FastAPI依赖
+    #     learning: 读取场景进度与学习历史的SQL仓库
+    #     catalog: 读取学习目录和场景权限的业务服务
+    #     messages: 查询站内消息与未读数量的业务服务
+    #     favorites: 读取收藏和复习队列的SQL仓库
+    #     clock: 提供当前时间的可替换时钟回调
+    # 返回:包含业务端点的FastAPI路由器
     router = APIRouter(prefix="/api/v1", tags=["checkins"])
 
     @router.get("/me/checkins/summary")
     async def summary(
         user_id: Annotated[str, Depends(user_dependency)],
     ) -> dict[str, int]:
+        # 功能:返回用户累计与连续打卡统计
+        # 参数:
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:当前连续、累计与最长连续打卡天数
         result = summarize_checkins(
             await repository.list_days(user_id), today=beijing_learning_date(clock())
         )
@@ -47,6 +65,10 @@ def create_checkins_router(
     async def home(
         user_id: Annotated[str, Depends(user_dependency)],
     ) -> dict[str, object]:
+        # 功能:汇总首页问候、打卡统计、今日任务与未读消息数量
+        # 参数:
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:首页问候、打卡统计、优先级选定的今日任务与未读消息数量
         result = summarize_checkins(
             await repository.list_days(user_id), today=beijing_learning_date(clock())
         )
@@ -126,6 +148,10 @@ def create_checkins_router(
 
 
 def _greeting(now: datetime) -> str:
+    # 功能:按北京时间时段选择首页问候语
+    # 参数:
+    #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
+    # 返回:对应北京时间时段的中文问候语
     hour = now.hour
     if hour < 12:
         return "早上好"

@@ -5,6 +5,10 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_learning_overview_deduplicates_open_scenes_and_learning_days() -> None:
+    # 功能:验证学习投影对开放场景完成与学习日期去重
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     from juya_miniapp_api.modules.learning.admin_projection import (
         InMemoryLearningOverviewRepository,
     )
@@ -42,6 +46,10 @@ async def test_learning_overview_deduplicates_open_scenes_and_learning_days() ->
 
 @pytest.mark.asyncio
 async def test_learning_overview_returns_zero_counts_for_unknown_user() -> None:
+    # 功能:验证未知用户的学习投影返回零数量
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     from juya_miniapp_api.modules.learning.admin_projection import (
         InMemoryLearningOverviewRepository,
     )

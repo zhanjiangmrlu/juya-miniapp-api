@@ -10,9 +10,17 @@ NOW = datetime(2026, 9, 28, 8, 0, tzinfo=UTC)
 
 @pytest.mark.asyncio
 async def test_feedback_commands_send_current_user_and_idempotency_key() -> None:
+    # 功能:验证反馈命令透传当前用户和幂等键
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     requests: list[httpx.Request] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        # 功能:模拟HTTP上游响应以验证反馈命令透传当前用户和幂等键
+        # 参数:
+        #     request: HTTP测试或上游请求对象
+        # 返回:上游HTTP响应对象
         requests.append(request)
         return httpx.Response(
             200,
@@ -23,6 +31,14 @@ async def test_feedback_commands_send_current_user_and_idempotency_key() -> None
     async with httpx.AsyncClient(
         transport=httpx.MockTransport(handler), base_url="http://admin.test"
     ) as http:
+        # 匿名函数: clock测试时钟返回固定操作时间以稳定签名与有效期断言
+        # 参数:
+        #     无形参。
+        # 返回: 测试预设的带UTC时区时间
+        # 匿名函数: nonce_factory提供可断言的固定内部签名随机数
+        # 参数:
+        #     无形参。
+        # 返回: 固定的nonce-1测试字符串
         client = AdminApiClient(
             http,
             secret=b"service-secret",
@@ -51,7 +67,15 @@ async def test_feedback_commands_send_current_user_and_idempotency_key() -> None
 
 @pytest.mark.asyncio
 async def test_feedback_upstream_error_is_mapped_without_internal_details() -> None:
+    # 功能:验证反馈上游错误转换后不暴露内部错误细节
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     async def handler(request: httpx.Request) -> httpx.Response:
+        # 功能:模拟HTTP上游响应以验证反馈上游错误转换后不暴露内部错误细节
+        # 参数:
+        #     request: HTTP测试或上游请求对象
+        # 返回:上游HTTP响应对象
         return httpx.Response(
             500,
             text="database password leaked",

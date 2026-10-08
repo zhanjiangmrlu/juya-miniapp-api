@@ -7,6 +7,11 @@ REVISION_ID = "01JLOCAL000000000000000001"
 
 
 def published_scene(scene_id: str, legacy: dict[str, Any]) -> dict[str, Any]:
+    # 功能:将旧本地场景转换为固定发布版本的内容契约
+    # 参数:
+    #     scene_id: 需要授权、学习或查询的场景公开标识
+    #     legacy: 待转换为发布契约的旧本地场景数据
+    # 返回:发布修订标识、内容版本及场景正文对象
     """将指定场景和历史演示数据转换为固定版本的本地发布响应。"""
     if scene_id == "scene-weekend-trip":
         return {

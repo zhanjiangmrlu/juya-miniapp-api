@@ -7,6 +7,10 @@ from juya_miniapp_api.main import create_app
 
 @pytest.mark.asyncio
 async def test_local_dev_mode_exposes_bootstrap_and_learning_contracts() -> None:
+    # 功能:验证本地开发模式提供启动和学习接口契约
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     """本地模式应在无外部基础设施时提供小程序启动和学习所需契约。"""
     app = create_app(Settings(environment="local", local_dev_mode=True))
 
@@ -32,6 +36,10 @@ async def test_local_dev_mode_exposes_bootstrap_and_learning_contracts() -> None
 
 @pytest.mark.asyncio
 async def test_local_dev_mode_preserves_mutable_feedback_and_message_state() -> None:
+    # 功能:验证本地反馈与消息修改状态可在后续请求读取
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     """本地模式的反馈与消息操作应返回可供页面继续流转的最新状态。"""
     app = create_app(Settings(environment="local", local_dev_mode=True))
 
@@ -60,6 +68,10 @@ async def test_local_dev_mode_preserves_mutable_feedback_and_message_state() -> 
 
 @pytest.mark.asyncio
 async def test_local_dev_mode_is_rejected_outside_local_environment() -> None:
+    # 功能:验证非本地环境拒绝启用本地开发模式
+    # 参数:
+    #     无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
     """生产环境不得因误设本地开关而暴露开发用接口。"""
     with pytest.raises(RuntimeError, match="OSS"):
         create_app(Settings(environment="production", local_dev_mode=True))

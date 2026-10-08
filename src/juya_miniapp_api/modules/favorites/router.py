@@ -30,6 +30,10 @@ class ReviewRequest(BaseModel):
 
 
 def _favorite(value: FavoriteEntry) -> dict[str, object]:
+    # 功能:序列化收藏记录、固定版本来源和可访问链接
+    # 参数:
+    #     value: 待转换的收藏记录及固定版本来源快照
+    # 返回:收藏类型、标准化英文、学习时间与固定版本来源列表
     return {
         "id": value.public_id,
         "entry_type": value.entry_type,
@@ -52,6 +56,10 @@ def _favorite(value: FavoriteEntry) -> dict[str, object]:
     }
 
 
+# 匿名函数: clock默认时钟在调用时读取当前UTC时间
+# 参数:
+#     无形参。
+# 返回: 带UTC时区的当前时间
 def create_favorites_router(
     service: FavoriteService,
     repository: SQLAlchemyFavoriteRepository,
@@ -60,6 +68,14 @@ def create_favorites_router(
     catalog: CatalogService | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> APIRouter:
+    # 功能:创建并绑定收藏复习路由与业务依赖
+    # 参数:
+    #     service: 收藏及复习业务服务,承载收藏复习业务操作
+    #     repository: SQL收藏与复习仓库,承载收藏复习业务操作
+    #     user_dependency: 校验登录凭证并取得当前用户标识的FastAPI依赖
+    #     catalog: 读取学习目录和场景权限的业务服务
+    #     clock: 提供当前时间的可替换时钟回调
+    # 返回:包含业务端点的FastAPI路由器
     router = APIRouter(prefix="/api/v1", tags=["favorites"])
 
     @router.get("/favorites")
@@ -68,6 +84,12 @@ def create_favorites_router(
         cursor: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
     ) -> dict[str, object]:
+        # 功能:分页列出当前用户收藏
+        # 参数:
+        #     user_id: 当前操作所属用户的公开标识
+        #     cursor: 分页游标;空值从第一页开始
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:收藏列表、下一页游标与是否还有后续页
         items = await repository.list_favorites(user_id, after_id=cursor, limit=limit + 1)
         visible = items[:limit]
         return {
@@ -82,6 +104,12 @@ def create_favorites_router(
         cursor: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
     ) -> dict[str, object]:
+        # 功能:返回当前用户收藏复习候选队列
+        # 参数:
+        #     user_id: 当前操作所属用户的公开标识
+        #     cursor: 分页游标;空值从第一页开始
+        #     limit: 本次查询或任务领取允许的最大记录数量
+        # 返回:可复习收藏列表、下一页游标与是否还有后续页
         items = await repository.list_favorites(user_id, after_id=cursor, limit=limit + 1)
         visible = items[:limit]
         return {
@@ -95,6 +123,11 @@ def create_favorites_router(
         payload: FavoriteRequest,
         user_id: Annotated[str, Depends(user_dependency)],
     ) -> dict[str, object]:
+        # 功能:创建收藏并固定发布版本、词条内容和来源快照
+        # 参数:
+        #     payload: 已校验的收藏词条类别、发布版本与来源定位
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:新建或合并后的收藏记录与固定版本来源快照
         return _favorite(
             await service.favorite(
                 user_id,
@@ -115,6 +148,11 @@ def create_favorites_router(
         favorite_id: str,
         user_id: Annotated[str, Depends(user_dependency)],
     ) -> dict[str, object]:
+        # 功能:读取收藏详情并生成有权访问的来源链接
+        # 参数:
+        #     favorite_id: 当前用户收藏记录的公开标识
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:收藏内容、固定发布版本来源与有权打开的原文链接
         accessible_scene_ids: set[str] = set()
         favorite = await repository.get(user_id, favorite_id)
         if favorite is not None and catalog is not None:
@@ -137,6 +175,11 @@ def create_favorites_router(
         favorite_id: str,
         user_id: Annotated[str, Depends(user_dependency)],
     ) -> None:
+        # 功能:删除当前用户收藏及关联来源
+        # 参数:
+        #     favorite_id: 当前用户收藏记录的公开标识
+        #     user_id: 当前操作所属用户的公开标识
+        # 返回:无返回值。
         await service.delete(user_id, favorite_id)
 
     @router.post("/reviews", status_code=201)
@@ -145,6 +188,12 @@ def create_favorites_router(
         user_id: Annotated[str, Depends(user_dependency)],
         idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
     ) -> dict[str, object]:
+        # 功能:校验并固定用户选择的收藏卡片生成复习会话
+        # 参数:
+        #     payload: 已校验的待复习的收藏卡片标识
+        #     user_id: 当前操作所属用户的公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        # 返回:复习会话标识、类型、开始时间、卡片数量与固定卡片标识
         review = await service.create_review(user_id, payload.card_ids, idempotency_key, clock())
         return {
             "id": review.id,
@@ -159,6 +208,12 @@ def create_favorites_router(
         user_id: Annotated[str, Depends(user_dependency)],
         idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
     ) -> dict[str, object]:
+        # 功能:幂等完成复习并更新所选收藏的复习时间与打卡
+        # 参数:
+        #     review_id: 收藏复习会话的公开标识
+        #     user_id: 当前操作所属用户的公开标识
+        #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
+        # 返回:复习会话标识、首次完成标记与北京时间打卡日期
         result = await service.complete_review(user_id, review_id, idempotency_key, clock())
         return {
             "id": result.session.id,

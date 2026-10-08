@@ -25,6 +25,10 @@ class ClickableSpan(ContentModel):
 
 
 class DialogueSentence(ContentModel):
+    # 匿名函数: default_factory为缺失标识的发布内容对象生成稳定初始标识
+    # 参数:
+    #     无形参。
+    # 返回: 不含连字符的32位UUID十六进制字符串
     id: str = Field(default_factory=lambda: uuid4().hex, min_length=1, max_length=64)
     speaker: str = Field(default="", max_length=100)
     english: str = Field(default="", max_length=10000)
@@ -66,6 +70,10 @@ class SceneContent(ContentModel):
 
     @model_validator(mode="after")
     def unique_objects(self) -> "SceneContent":
+        # 功能:校验发布内容中的稳定标识与资源键不重复
+        # 参数:
+        #     self: 当前固定发布版本的场景内容对象实例
+        # 返回:固定发布版本的场景内容对象
         ids = [row.id for row in self.dialogue]
         if len(ids) != len(set(ids)):
             raise ValueError("Dialogue sentence identifiers must be unique")

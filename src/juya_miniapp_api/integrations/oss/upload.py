@@ -14,6 +14,10 @@ from juya_miniapp_api.shared.ids import new_ulid
 
 
 class OssUploadService:
+    # 匿名函数: clock默认时钟在调用时读取当前UTC时间
+    # 参数:
+    #     无形参。
+    # 返回: 带UTC时区的当前时间
     def __init__(
         self,
         *,
@@ -29,6 +33,21 @@ class OssUploadService:
         ttl: timedelta = timedelta(minutes=5),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
+        # 功能:初始化用户图片直传凭证服务并保存所需依赖与配置
+        # 参数:
+        #     self: 当前用户图片直传凭证服务实例
+        #     endpoint: OSS HTTPS服务端点
+        #     bucket: OSS存储桶名称
+        #     access_key_id: OSS访问凭证标识
+        #     access_key_secret: OSS访问凭证签名密钥
+        #     region: OSS存储桶所在地域
+        #     security_token: OSS临时凭证附带的STS安全令牌
+        #     credentials_expires_at: OSS临时访问凭证的绝对失效时间
+        #     credentials_provider: 读取或轮换OSS访问凭证的提供器
+        #     max_bytes: 头像或截图上传允许的最大字节数
+        #     ttl: 上传策略或缓存允许存活的时间间隔
+        #     clock: 提供当前时间的可替换时钟回调
+        # 返回:无返回值。
         parts = urlsplit(endpoint if "://" in endpoint else "https://" + endpoint)
         if (
             parts.scheme != "https"
@@ -53,12 +72,31 @@ class OssUploadService:
         self._clock = clock
 
     def create_feedback_upload(self, user_id: str, content_type: str) -> dict[str, object]:
+        # 功能:签发绑定当前用户的反馈截图上传凭证
+        # 参数:
+        #     self: 当前用户图片直传凭证服务实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     content_type: 待上传图片的MIME类型,仅接受受支持图片格式
+        # 返回:精确绑定截图对象键和MIME的OSS V4上传表单与有效期
         return self._create_upload(user_id, content_type, "feedback")
 
     def create_avatar_upload(self, user_id: str, content_type: str) -> dict[str, object]:
+        # 功能:签发绑定当前用户的头像图片上传凭证
+        # 参数:
+        #     self: 当前用户图片直传凭证服务实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     content_type: 待上传图片的MIME类型,仅接受受支持图片格式
+        # 返回:精确绑定头像对象键和MIME的OSS V4上传表单与有效期
         return self._create_upload(user_id, content_type, "uploads/avatars")
 
     def _create_upload(self, user_id: str, content_type: str, namespace: str) -> dict[str, object]:
+        # 功能:签发绑定用户对象键和图片类型的OSS V4上传策略
+        # 参数:
+        #     self: 当前用户图片直传凭证服务实例
+        #     user_id: 当前操作所属用户的公开标识
+        #     content_type: 待上传图片的MIME类型,仅接受受支持图片格式
+        #     namespace: 缓存业务分区或上传对象所属目录
+        # 返回:OSS上传地址、对象键、V4签名表单、大小上限与过期时间
         if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", user_id) is None:
             raise AppError("FEEDBACK_UPLOAD_USER_INVALID", "用户标识无效", 422)
         extensions = {
