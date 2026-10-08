@@ -1,5 +1,6 @@
 import os
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal
 
 from pydantic import SecretStr
@@ -11,6 +12,7 @@ class Settings(BaseSettings):
 
     environment: str = "local"
     local_dev_mode: bool = False
+    local_content_file: Path | None = None
     content_security_enabled: bool = False
     service_name: str = "juya-miniapp-api"
     log_level: str = "INFO"

@@ -20,6 +20,23 @@
 
 服务监听 `http://127.0.0.1:8000`，提供小程序 V1.3 页面所需的契约数据、可变反馈/消息状态、静音音频和本地上传接收端。该模式仅在 `JUYA_ENVIRONMENT=local|test` 且 `JUYA_LOCAL_DEV_MODE=true` 时启用，生产环境不会注册这些路由。
 
+### 本地真实内容与录音预览
+
+管理端已有草稿时，可以只读导入指定修订及其素材绑定，使用与管理端 SHA256 完全相同的本地原图、录音：
+
+```powershell
+.venv\Scripts\python.exe scripts\start-local-real.py `
+  --revision 01M3VFQMRK4SQKNGZG1KZ1ZEBS `
+  --media-directory 'D:\个人\图片+音频\图片+音频' `
+  --port 8001
+```
+
+先加 `--check-only` 可验证文件和管理端绑定而不启动服务。需要现有 `juya-admin-api-admin-api-1` 本地容器；可通过 `--admin-container` 指定另一个本地管理容器。只读查询在容器中执行，数据库凭据不会输出或写入清单。
+
+启动时读取管理端的正文、真实修订、词条及音频版本，校验已确认素材和原文件哈希，再同步替换首页任务、目录、正文、词卡与收藏来源。音频由后端 `FileResponse` 提供，支持 `Range` 和 `HEAD`。更新管理端草稿后需重新运行脚本。素材缺失、错配或启动后被替换会明确失败，不回退到静音。
+
+这是本地草稿预览，保留演示登录、学习进度等本地状态，不修改草稿、不发布、不上传素材，也不是正式微信身份和生产服务。仅 `JUYA_ENVIRONMENT=local` 且 `JUYA_LOCAL_DEV_MODE=true` 可使用 `JUYA_LOCAL_CONTENT_FILE`。句子 `timing_confirmed` 和词条音频绑定完全保留管理端值；未确认句子仍不能逐句播放。
+
 安装锁定依赖：
 
 ```powershell

@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 
 from juya_miniapp_api.api.local_content import REVISION_ID, published_scene
+from juya_miniapp_api.api.local_real_content import LocalRealContent
 from juya_miniapp_api.modules.favorites.router import FavoriteRequest
 from juya_miniapp_api.modules.favorites.service import normalize_favorite_key
 
@@ -178,15 +179,24 @@ def _favorite_item(entry: dict[str, Any], favorite_id: str) -> dict[str, Any]:
 
 
 def _local_entry(
-    scene_id: str, entry_id: str, revision_id: str, entry_version: int, source_locator: str
+    scene_id: str,
+    entry_id: str,
+    revision_id: str,
+    entry_version: int,
+    source_locator: str,
+    opened: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """按 scene_id、entry_id、revision_id、entry_version 和 source_locator 解析发布词卡"""
-    if not any(item["scene_id"] == scene_id for item in _catalog()["items"]):
-        raise HTTPException(404, "Scene not found")
-    opened = published_scene(scene_id, _scene())
+    """解析场景 scene_id 中词条 entry_id 的固定修订 revision_id 与版本 entry_version
+
+    source_locator 为正文来源，opened 为可选真实管理快照
+    """
+    if opened is None:
+        if not any(item["scene_id"] == scene_id for item in _catalog()["items"]):
+            raise HTTPException(404, "Scene not found")
+        opened = published_scene(scene_id, _scene())
     if opened["access"] == "PREVIEW":
         raise HTTPException(403, "Scene access denied")
-    if revision_id != REVISION_ID:
+    if revision_id != opened["scene"]["revision_id"]:
         raise HTTPException(409, "Scene revision changed")
     content = opened["scene"]["content"]
     for entry_type, rows in (
@@ -282,10 +292,25 @@ class LocalDevState:
         self.messages = {default_message["id"]: default_message}
 
 
-def create_local_dev_router() -> APIRouter:
-    """创建仅限本地环境使用的完整小程序契约路由。"""
+def create_local_dev_router(real_content: LocalRealContent | None = None) -> APIRouter:
+    """创建本地契约路由，real_content 为显式指定的真实管理端修订与素材"""
     router = APIRouter()
     state = LocalDevState()
+    if real_content:
+        state.catalog = real_content.catalog("", 0)
+        state.favorites.clear()
+    real_history: dict[str, dict[str, Any]] = {}
+
+    def record_real_history(scene_id: str, completed: bool = False) -> None:
+        """为真实场景 scene_id 保存本地学习历史，completed 表示本次完成场景"""
+        if not real_content:
+            return
+        real_content.opened(scene_id)
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        item = real_history.setdefault(scene_id, {"scene_id": scene_id, "completed_at": None})
+        item["last_learned_at"] = now
+        if completed:
+            item["completed_at"] = now
 
     @router.post("/api/v1/session/wechat")
     async def login_with_wechat() -> dict[str, str]:
@@ -313,7 +338,7 @@ def create_local_dev_router() -> APIRouter:
             "today_task": {
                 "card_ids": [],
                 "kind": "CONTINUE_SCENE",
-                "target_id": "scene-castle",
+                "target_id": real_content.scene_id if real_content else "scene-castle",
             },
             "unread_message_count": unread_count,
         }
@@ -335,6 +360,10 @@ def create_local_dev_router() -> APIRouter:
     @router.get("/api/v1/learning/catalog")
     async def get_catalog(request: Request) -> dict[str, Any]:
         """返回当前本地学习目录快照。"""
+        if real_content:
+            return real_content.catalog(
+                str(request.base_url).rstrip("/"), state.catalog["items"][0]["progress"]
+            )
         catalog = deepcopy(state.catalog)
         for item in catalog["items"]:
             item["image_url"] = (
@@ -439,21 +468,44 @@ def create_local_dev_router() -> APIRouter:
 
     @router.post("/api/v1/scenes/{scene_id}/open")
     async def open_scene(scene_id: str) -> dict[str, Any]:
-        """返回指定场景，本地数据统一复用完整示例内容。"""
+        """返回 scene_id 对应的真实修订或隔离演示内容"""
+        if real_content:
+            return real_content.opened(scene_id)
         return published_scene(scene_id, _scene())
 
     @router.get("/api/v1/scenes/{scene_id}/entries/{entry_id}")
     async def get_entry(
         scene_id: str, entry_id: str, revision_id: str, entry_version: int, source_locator: str
     ) -> dict[str, Any]:
-        """读取固定修订、词条版本与来源对应的本地词卡。"""
-        return _local_entry(scene_id, entry_id, revision_id, entry_version, source_locator)
+        """读取场景 scene_id 中词条 entry_id 的修订 revision_id 与版本 entry_version
+
+        source_locator 为正文来源
+        """
+        return _local_entry(
+            scene_id,
+            entry_id,
+            revision_id,
+            entry_version,
+            source_locator,
+            real_content.opened(scene_id) if real_content else None,
+        )
 
     @router.get("/api/v1/scenes/{scene_id}/resources/{resource_id}/signed-url")
     async def sign_resource(
         scene_id: str, resource_id: str, revision_id: str, request: Request, response: Response
     ) -> dict[str, str]:
-        """只给当前场景固定修订实际引用的资源返回本地地址。"""
+        """为场景 scene_id、资源 resource_id 和修订 revision_id 返回本地资源地址
+
+        request 提供服务地址，response 用于设置缓存策略
+        """
+        if real_content:
+            real_content.validate_resource(scene_id, resource_id, revision_id)
+            response.headers["Cache-Control"] = "private, no-store"
+            return {
+                "resource_id": resource_id,
+                "expires_at": "2099-01-01T00:00:00Z",
+                "url": f"{str(request.base_url).rstrip('/')}/local-dev/resources/{resource_id}",
+            }
         opened = published_scene(scene_id, _scene())
         if opened["access"] == "PREVIEW":
             raise HTTPException(403, "Scene access denied")
@@ -480,7 +532,9 @@ def create_local_dev_router() -> APIRouter:
 
     @router.api_route("/local-dev/resources/{resource_id}", methods=["GET", "HEAD"])
     def resource_bytes(resource_id: str) -> Response:
-        """提供本地演示原图或合成静音音频，不能作为真机试听证据。"""
+        """按 resource_id 返回真实素材；未启用真实预览时提供隔离演示夹具"""
+        if real_content:
+            return real_content.resource(resource_id)
         if resource_id in {"coffee-original", "coffee-cover"}:
             asset = Path(__file__).resolve().parents[3] / "fixtures" / "coffee-original.png"
             if not asset.is_file():
@@ -499,8 +553,9 @@ def create_local_dev_router() -> APIRouter:
 
     @router.put("/api/v1/scenes/{scene_id}/progress")
     async def save_progress(scene_id: str, request: Request) -> dict[str, Any]:
-        """回显并保存页面提交的场景进度位置。"""
+        """按场景 scene_id 保存 request 提交的进度并更新本地学习历史"""
         payload = await request.json()
+        record_real_history(scene_id)
         for item in state.catalog["items"]:
             if item["scene_id"] == scene_id:
                 item["progress"] = max(int(item.get("progress", 0)), 1)
@@ -508,7 +563,8 @@ def create_local_dev_router() -> APIRouter:
 
     @router.post("/api/v1/scenes/{scene_id}/complete")
     async def complete_scene(scene_id: str) -> dict[str, Any]:
-        """完成场景并更新本地目录进度。"""
+        """完成场景 scene_id 并更新本地目录及历史"""
+        record_real_history(scene_id, completed=True)
         for item in state.catalog["items"]:
             if item["scene_id"] == scene_id:
                 item["progress"] = 100
@@ -527,7 +583,16 @@ def create_local_dev_router() -> APIRouter:
 
     @router.post("/api/v1/media/{target_id}/signed-url")
     async def get_signed_media(target_id: str, request: Request) -> dict[str, str]:
-        """返回指向当前本地服务的静音音频地址。"""
+        """按 target_id 返回 request 所在服务的音频资源地址"""
+        if real_content:
+            real_content.validate_resource(
+                real_content.scene_id, target_id, real_content.revision_id
+            )
+            return {
+                "target_id": target_id,
+                "expires_at": "2099-01-01T00:00:00Z",
+                "url": f"{str(request.base_url).rstrip('/')}/local-dev/resources/{target_id}",
+            }
         base_url = str(request.base_url).rstrip("/")
         return {
             "expires_at": "2099-01-01T00:00:00Z",
@@ -537,7 +602,9 @@ def create_local_dev_router() -> APIRouter:
 
     @router.api_route("/local-dev/media/{target_id}.wav", methods=["GET", "HEAD"])
     async def get_local_audio(target_id: str) -> Response:
-        """提供静音音频响应以验证本地播放器状态机。"""
+        """按 target_id 提供真实录音，隔离模式继续使用测试夹具"""
+        if real_content:
+            return real_content.resource(target_id)
         _ = target_id
         asset = _FIXTURES / "silence-1.wav"
         return FileResponse(asset, media_type="audio/wav")
@@ -560,6 +627,7 @@ def create_local_dev_router() -> APIRouter:
             payload.revision_id,
             payload.entry_version,
             payload.source_locator,
+            real_content.opened(payload.scene_id) if real_content else None,
         )
         if payload.entry_type != entry["entry_type"]:
             raise HTTPException(422, "Entry type does not match published entry")
@@ -570,7 +638,9 @@ def create_local_dev_router() -> APIRouter:
 
     @router.get("/api/v1/favorites/{favorite_id}")
     async def get_favorite(favorite_id: str) -> dict[str, Any]:
-        """返回指定收藏，不存在时回退到默认示例。"""
+        """读取 favorite_id 对应收藏，真实模式的失效收藏返回未找到"""
+        if real_content and favorite_id not in state.favorites:
+            raise HTTPException(404, "Favorite not found")
         return deepcopy(state.favorites.get(favorite_id, _favorite()))
 
     @router.delete("/api/v1/favorites/{favorite_id}")
@@ -581,6 +651,8 @@ def create_local_dev_router() -> APIRouter:
     @router.get("/api/v1/history/scenes")
     async def get_scene_history() -> dict[str, Any]:
         """返回本地场景学习历史。"""
+        if real_content:
+            return {"items": deepcopy(list(real_history.values()))}
         return {
             "items": [
                 {
