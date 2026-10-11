@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 
 from juya_miniapp_api.modules.checkins.repository import SQLAlchemyCheckinRepository
 from juya_miniapp_api.modules.checkins.service import (
+    BEIJING,
     beijing_learning_date,
     summarize_checkins,
 )
@@ -78,8 +79,10 @@ def create_checkins_router(
         if learning is not None:
             history = await learning.list_history(user_id)
             catalog_scene_ids: list[str] = []
+            entitled_stage = False
             if catalog is not None:
                 catalog_result = await catalog.catalog(user_id, {})
+                entitled_stage = catalog_result.user_stage == "ENTITLED"
                 for item in catalog_result.items:
                     candidate = item.get("scene_id") or item.get("public_id") or item.get("id")
                     if isinstance(candidate, str):
@@ -88,6 +91,7 @@ def create_checkins_router(
                 dict.fromkeys([item.scene_id for item in history] + catalog_scene_ids)
             )
             accessible = set(all_scene_ids)
+            open_ids: set[str] = set()
             if catalog is not None and all_scene_ids:
                 projections = await catalog.access(user_id, all_scene_ids)
                 accessible = {
@@ -95,21 +99,28 @@ def create_checkins_router(
                     for item in projections
                     if item.level in {"OPEN", "FORMAL", "LIMITED"}
                 }
+                open_ids = {item.scene_id for item in projections if item.level == "OPEN"}
+            learning_candidates = accessible - open_ids if entitled_stage else accessible
             unfinished = [
                 TodayTask("CONTINUE_SCENE", item.scene_id)
                 for item in history
-                if item.completed_at is None and item.scene_id in accessible
+                if item.completed_at is None and item.scene_id in learning_candidates
             ]
             completed = [
                 TodayTask("HISTORY_SCENE", item.scene_id)
-                for item in history
-                if item.completed_at is not None and item.scene_id in accessible
+                # Reopening a completed scene updates last_learned_at. There is
+                # no separate scene review timestamp in the current owned model.
+                for item in sorted(history, key=lambda item: (item.last_learned_at, item.scene_id))
+                if item.scene_id in accessible
+                and (
+                    item.completed_at is not None or (entitled_stage and item.scene_id in open_ids)
+                )
             ]
             history_ids = {item.scene_id for item in history}
             new_scenes = [
                 TodayTask("NEW_SCENE", scene_id)
                 for scene_id in catalog_scene_ids
-                if scene_id in accessible and scene_id not in history_ids
+                if scene_id in learning_candidates and scene_id not in history_ids
             ]
             review_cards: list[TodayTask] = []
             if snapshots is not None:
@@ -168,7 +179,7 @@ def _greeting(now: datetime) -> str:
     # 参数:
     #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
     # 返回:对应北京时间时段的中文问候语
-    hour = now.hour
+    hour = (now if now.tzinfo else now.replace(tzinfo=UTC)).astimezone(BEIJING).hour
     if hour < 12:
         return "早上好"
     if hour < 18:
