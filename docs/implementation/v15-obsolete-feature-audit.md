@@ -58,10 +58,49 @@ uv run pytest tests/unit/favorites tests/unit/learning/test_v15_detail.py tests/
 
 清理首页旧分支之后，扩大必要范围到`tests/unit/checkins/test_v15_home_priority.py`及`tests/unit/learning/test_v15_history_pagination.py`，连同上面测试一起执行：97 passed，1 warning，2.90s。首页权益优先级、收藏优先复习、101场景历史分批与分页、旧收藏/新快照/纯阅读/资料契约均通过；正式OpenAPI与冻结JSON快照一致。Ruff检查通过、229文件格式检查通过、mypy检查131源文件无错误，git diff --check通过。未重新跑数据库/SQL或发布环境验收。
 
-最终只读评审未发现源码确证P1/P2；已纠正历史接口差异措辞：分页场景历史无can_open字段，不把独立访问投影写作该接口现有能力。文中“银行”为需求§8定义的词汇银行/语块银行，不是中央词库。
+首页旧分支清理的最终只读评审未发现该改动范围内源码确证P1/P2；已纠正历史接口差异措辞：分页场景历史无can_open字段，不把独立访问投影写作该接口现有能力。文中“银行”为需求§8定义的词汇银行/语块银行，不是中央词库。后续追加的封面核查结论单独见下文。
 
 ## 交付结论
 
 已清理1项确证在正式装配下不可达、且被新版完整替代的内部实现：首页复习旧聚合收藏分页fallback。checkins/router.py删除favorites参数、旧repo导入与备用分页分支，runtime.py删除多余favorites注入；首页队列继续通过SnapshotService完整分页，review_queue_url固定为既有schema2值。旧数据的读写/迁移、公开路由及新快照均未删除，公开契约保持不变。
 
 公开接口移除0项、数据/迁移删除0项。已明确3项公开收口候选（逐条entries、资料PATCH别名、open-history），以及旧媒体fallback和旧favorites写路径的依赖条件。其他方法仍有调用或历史职责，不强行按名称删模块。公开候选及跨仓库替换先交协调对话；最终范围由协调决定并更新公开契约与消费者快照。
+
+## 追加只读核查：schema1安全封面回退
+
+依据最新需求§32.6及ZIP规则“原学习大图不得自动当公开封面”。核查共享5174手机预览的首页/NEW学习列表图片来源；截图只用作定位线索，没有按图片样式认定越权，也未把样例文案或数量不同列为UI缺陷。
+
+**结论：旧schema1自动fallback已确认，但截图未证明受限越权。** 当前样例没有显式设置cover_asset_id，却已有学习图被保存为目录封面。代码回退和存量字段污染均需处理，不能只解释为样例显式选择了独立安全封面。当前行与代码fallback链条一致；只读现状不用于推断唯一的历史写入过程。
+
+### 只读SQL与运行模式判定
+
+此前只读查询共享管理数据库的scene、当前scene_revision及对应media_asset，仅SELECT。受控样例元数据如下，未记录object_key、数据库地址、凭据、Cookie/JWT或实际签名URL：
+
+| 字段/比较 | 结果 |
+| --- | --- |
+| scene.public_id | 01M3VB2264N5XNJXQTZ8P8BCT0 |
+| title/status | A Better Fit / PUBLISHED |
+| snapshot.schema_version | 缺失；SceneContent默认按schema1解析 |
+| snapshot.cover_asset_id | null |
+| snapshot.original_image_asset_id | 01M3VB21SZCMG0G67DHWZE1VWN |
+| scene.cover_object_key非空 | true |
+| scene.cover_object_key等于学习图media_asset.object_key | true |
+| scene.cover_object_key匹配显式cover_asset_id | 无显式封面可匹配 |
+
+共享mini服务的只读环境元数据：local_dev_mode=false、has_local_content_file=false。因此下述LocalRealContent回退确实存在于源码，但未构成本次共享截图的运行来源。配置值、文件和数据均未修改。
+
+### 完整来源与三个修复点
+
+1. **发布时自动写入学习图。** [ProductionStore.publish](D:/个人/juya/juya-admin-api/src/juya_admin_api/modules/content/production_store.py:1083)先取content.cover_asset_id，在schema1分支第1085行执行`cover_id = cover_id or content.original_image_asset_id`，第1091行更新scene.cover_object_key。缺独立封面时会把学习图对象键作为目录封面写入。后续修复应取消这个自动回退，使用明确安全封面/安全默认素材或空值，不修改旧正文、素材及收藏事实。本次未实施产品修复。
+2. **目录/预览继续信任已污染的历史cover_object_key。** [SQLAlchemyContentRepository.learning_catalog](D:/个人/juya/juya-admin-api/src/juya_admin_api/modules/content/repository.py:1096)在第1108行读取scene.cover_object_key；[access_policy.learning_catalog](D:/个人/juya/juya-admin-api/src/juya_admin_api/modules/access_policy/router.py:245)在第248行直接以该键调用sign_media并赋给image_url。旧[get_preview_scene](D:/个人/juya/juya-admin-api/src/juya_admin_api/modules/content/repository.py:1226)也读取同一字段，其[预览路由](D:/个人/juya/juya-admin-api/src/juya_admin_api/modules/access_policy/router.py:343)在第346行签发。它们不能仅以历史键非空或素材已审核，就证明它是独立安全封面；停止新增fallback无法消除已有字段污染。读取应依据当前发布版本明确的安全COVER绑定核验，拒绝以受限学习图冒充封面，历史字段处理由对应所有者安排。
+3. **本地真实内容预览的同类回退。** [LocalRealContent.catalog](D:/个人/juya/juya-miniapp-api/src/juya_miniapp_api/api/local_real_content.py:68)在第77行使用`content["cover_asset_id"] or content["original_image_asset_id"]`，第88行作为image_url返回。后续可取消学习图fallback；当前共享服务未启用该模式，不能把此分支当作本次共享来源。
+
+BFF [AdminApiClient.get_catalog](D:/个人/juya/juya-miniapp-api/src/juya_miniapp_api/integrations/admin_api/client.py:97)调用管理/internal/v1/learning/catalog，CatalogService仅投影学习阶段/配置并透传items。前端[catalog-presenter.presentScene](D:/个人/juya/juya-miniapp/src/features/learning/catalog-presenter.ts:45)使用scene.image_url；[useHomePage](D:/个人/juya/juya-miniapp/src/features/home/use-home-page.ts:80)也加载该catalog。因此首页图片来自目录，而非GET /home另行签发图片。
+
+新版[V15AccessService.preview_cover](D:/个人/juya/juya-admin-api/src/juya_admin_api/modules/v15_access/service.py:115)仅接受明确cover_asset_id及COVER角色：缺封面第124行返回CONTENT_COVER_MISSING/404，角色不符第126行拒绝；不会自动回退为学习大图。这条安全路径的存在不替代旧目录/预览的历史字段核验。
+
+### 手机范围与本次交付边界
+
+协调手机矩阵已按Figma中`type=FRAME、name=M、width=390、height=844`的严格画面筛选统一为**39个手机画面**；初始40误计了遮罩层，不能继续沿用。本审计和后续报告均按39计，平板暂不纳入。39是设计画面统计口径，不是本次已验证通过的页面数量。
+
+本追加任务仅记录前述只读SQL与源码结论，没有新增SQL查询、运行服务、修改共享数据、重启服务或修复产品代码。文档提交不改变公开契约、JSON/TS哈希或此前97项范围测试的代码基线；不为文档重复测试/构建。封面三个修复点交协调及对应仓库所有者继续处理，未宣称已修复或已完成实际受限越权验证。
