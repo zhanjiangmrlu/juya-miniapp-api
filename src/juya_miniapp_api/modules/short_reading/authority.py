@@ -10,6 +10,7 @@ from juya_miniapp_api.integrations.admin_api.schemas import SignedResource
 from juya_miniapp_api.integrations.admin_api.v15_client import AdminV15Client
 from juya_miniapp_api.integrations.admin_api.v15_facts import SQLAuthorizer
 from juya_miniapp_api.modules.favorites.snapshots import StrictModel, request_digest
+from juya_miniapp_api.modules.short_reading.cover import current_cover_url
 from juya_miniapp_api.modules.short_reading.domain import Paragraph, ReadingDetail, ReadingPreview
 from juya_miniapp_api.modules.short_reading.order import ReadingListCursor
 from juya_miniapp_api.shared.errors import AppError
@@ -54,10 +55,27 @@ class V15ReadingAuthority:
         )
         if raw.content_id != identity:
             raise AppError("CONTENT_CONTRACT_INVALID", "短文标识不一致", 503)
+        cover = None
+        if raw.cover_asset_id is not None:
+            cover = await self.client.preview_cover(user_id, "short_reading", identity)
+            current_cover_url(cover, raw.cover_asset_id, datetime.now(UTC))
+            current = _validate(
+                InternalPreview, await self.client.preview(user_id, "short_reading", identity)
+            )
+            if current != raw:
+                raise AppError("CONTENT_VERSION_CONFLICT", "短文已更新,请刷新预览", 409)
+        access = await self.access(user_id, identity)
+        # Recheck expiry after both live preview and local module/account authorization.
+        cover_url = (
+            current_cover_url(cover, raw.cover_asset_id, datetime.now(UTC))
+            if raw.cover_asset_id is not None
+            else None
+        )
         return ReadingPreview(
             **raw.model_dump(exclude={"content_version", "safe_intro", "cover_asset_id"}),
             introduction=raw.safe_intro,
-            access=await self.access(user_id, identity),
+            access=access,
+            cover_url=cover_url,
         )
 
     async def listing(self, user_id: str, cursor: str | None, limit: int) -> dict[str, object]:
