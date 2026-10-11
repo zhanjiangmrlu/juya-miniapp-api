@@ -174,3 +174,5 @@ Ruling: 沿用用户指定feature分支和本进度ledger，必要独立子任�
 - 本仓本轮代码缺口已闭合，可由协调消费；最终四项目真实页面、微信身份/设备、版权/人工听音、云预算/OSS CORS与Range、生产分别待对应验收，不能由这些本地门禁替代。
 
 - 最终代码/公共契约冻结：`b38294b fix(v1.5): 闭合旧录音资料入口与历史资源释放契约`。JSON和TS提交blob SHA及工作区字节一致，详见v15-contract-handoff.md；前置能力提交a9a97b8/c9e2f14/17a6552。后续仅记录此证据的文档提交不改变契约。
+
+- 哈希核验更正：JSON生成时Windows把LF转为CRLF，最初工作区SHA与Git原始blob SHA不同，但语义一致。已将当前交付文件按提交LF字节统一，JSON正式blob SHA为6c6105d3b3d0e201b3824ecef796e38a595bc30e574b7b87aa3c04f049c4e780；TS仍0c2824feec6b89e6f3470572dcb16cb30bebcdcf860e86430e082eff3da255fc。两个工作区文件现在与提交原始字节一致，OpenAPI快照定向复核通过。未来以Git blob（LF）作为跨平台冻结哈希。

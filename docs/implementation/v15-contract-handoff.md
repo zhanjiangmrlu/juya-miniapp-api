@@ -44,7 +44,7 @@
 
 ## 第三轮契约（旧版录音、资料入口与安全媒体）
 
-最终代码/契约冻结提交：`b38294b`；前置能力提交`a9a97b8`、`c9e2f14`、`17a6552`。本轮完整隔离门禁378 passed/1 external skip、覆盖83.38%，静态检查全部通过。提交blob与当前JSON/TS字节已逐一核对一致，下面SHA对应正式提交；后续进度文档提交不改变这两个文件。
+最终代码/契约冻结提交：`b38294b`；前置能力提交`a9a97b8`、`c9e2f14`、`17a6552`。本轮完整隔离门禁378 passed/1 external skip、覆盖83.38%，静态检查全部通过。下面SHA以Git原始blob（LF）为准；当前JSON/TS已按LF逐一核对与提交字节一致。Windows未来检出可能转换CRLF，核对提交时应使用原始blob；换行不改变JSON语义。后续进度文档提交不改变这两个正式契约。
 
 实际配置完整运行时仍为64 paths/73 operations，新增`PublishedScene.recording_enabled: boolean`，默认false；已授权schema1外层每次读取当前实际审核配置。前端`scene-response`旧版适配须将该外层值严格透传，不能读取不可变content快照中的臆造字段。
 
@@ -54,7 +54,7 @@
 
 | 文件 | SHA-256 |
 | --- | --- |
-| `D:/个人/juya/juya-miniapp-api/docs/contracts/miniapp-api.json` | `c0129e89e0ea3e496df0723d98f7bafc02c2f2c1a06816ad4b16d7b11dfb7b12` |
+| `D:/个人/juya/juya-miniapp-api/docs/contracts/miniapp-api.json` | `6c6105d3b3d0e201b3824ecef796e38a595bc30e574b7b87aa3c04f049c4e780` |
 | `D:/个人/juya/juya-miniapp-api/docs/contracts/miniapp-api.d.ts` | `0c2824feec6b89e6f3470572dcb16cb30bebcdcf860e86430e082eff3da255fc` |
 
 本轮提交及统一门禁结果见v15-progress.md。本仓新契约必须取代前端a9a97b8固定fixture；根生成器以本轮最终提交`--ref HEAD`同步同一路径。最终页面、设备/云端/人工/生产仍由对应验收处理。
