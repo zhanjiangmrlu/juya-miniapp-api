@@ -89,6 +89,15 @@ async def test_mysql_snapshot_concurrency_cancel_revision_events_and_atomic_guar
             user, [restored.favorite_id, other.favorite_id], "review", NOW
         )
         assert review.snapshot_versions == [2, 1]
+        from juya_miniapp_api.modules.learning.admin_projection import (
+            SQLAlchemyLearningOverviewRepository,
+        )
+        from juya_miniapp_api.modules.users.repository import SQLAlchemyUserRepository
+
+        assert (await SQLAlchemyUserRepository(sessions).learning_achievements(user))[
+            "favorite_vocabulary"
+        ] == 2
+        assert (await SQLAlchemyLearningOverviewRepository(sessions).get(user)).favorite_count == 2
         completions = await asyncio.gather(
             *[repo.complete_review(user, review.id, "done-" + str(i), NOW) for i in range(10)]
         )

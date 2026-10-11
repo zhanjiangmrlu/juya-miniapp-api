@@ -622,7 +622,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PositionRequest"
+                "$ref": "#/components/schemas/juya_miniapp_api__modules__learning__router__PositionRequest"
               }
             }
           }
@@ -1510,6 +1510,22 @@
         "operationId": "create_favorite_api_v1_favorites_post",
         "parameters": [
           {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
             "name": "Authorization",
             "in": "header",
             "required": false,
@@ -1596,6 +1612,40 @@
               "minimum": 1,
               "default": 50,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "snapshot_schema",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                1,
+                2
+              ],
+              "type": "integer",
+              "default": 1,
+              "title": "Snapshot Schema"
+            }
+          },
+          {
+            "name": "entry_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "word",
+                    "chunk"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entry Type"
             }
           },
           {
@@ -1872,6 +1922,1056 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Complete Review Api V1 Reviews  Review Id  Complete Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/favorite-snapshots": {
+      "post": {
+        "tags": [
+          "favorite-snapshots"
+        ],
+        "summary": "Create",
+        "operationId": "create_api_v1_favorite_snapshots_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnapshotCreateReference"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoriteSnapshotResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "favorite-snapshots"
+        ],
+        "summary": "Listing",
+        "operationId": "listing_api_v1_favorite_snapshots_get",
+        "parameters": [
+          {
+            "name": "entry_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "word",
+                    "chunk"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entry Type"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoriteSnapshotPageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/favorite-snapshots/{favorite_id}/source-resolution": {
+      "get": {
+        "tags": [
+          "favorite-snapshots"
+        ],
+        "summary": "Source",
+        "operationId": "source_api_v1_favorite_snapshots__favorite_id__source_resolution_get",
+        "parameters": [
+          {
+            "name": "favorite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Favorite Id"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoriteSourceResolutionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/favorite-snapshots/{favorite_id}": {
+      "get": {
+        "tags": [
+          "favorite-snapshots"
+        ],
+        "summary": "Detail",
+        "operationId": "detail_api_v1_favorite_snapshots__favorite_id__get",
+        "parameters": [
+          {
+            "name": "favorite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Favorite Id"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoriteSnapshotResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "favorite-snapshots"
+        ],
+        "summary": "Cancel",
+        "operationId": "cancel_api_v1_favorite_snapshots__favorite_id__delete",
+        "parameters": [
+          {
+            "name": "favorite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Favorite Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoriteSnapshotCancelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pronunciations/{target_id}/resolve": {
+      "post": {
+        "tags": [
+          "pronunciation"
+        ],
+        "summary": "Resolve",
+        "operationId": "resolve_api_v1_pronunciations__target_id__resolve_post",
+        "parameters": [
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Target Id"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PronunciationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PronunciationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pronunciations/tasks/{task_id}": {
+      "get": {
+        "tags": [
+          "pronunciation"
+        ],
+        "summary": "Poll",
+        "operationId": "poll_api_v1_pronunciations_tasks__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "favorite_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Favorite Id"
+            }
+          },
+          {
+            "name": "content_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "dialogue",
+                    "word_card",
+                    "short_reading"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content Type"
+            }
+          },
+          {
+            "name": "content_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content Id"
+            }
+          },
+          {
+            "name": "content_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content Version"
+            }
+          },
+          {
+            "name": "entry_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entry Id"
+            }
+          },
+          {
+            "name": "sense_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sense Id"
+            }
+          },
+          {
+            "name": "source_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "resource_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resource Version"
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Id"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PronunciationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/short-readings": {
+      "get": {
+        "tags": [
+          "short-readings"
+        ],
+        "summary": "Listing",
+        "operationId": "listing_api_v1_short_readings_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/short-readings/{identity}/preview": {
+      "get": {
+        "tags": [
+          "short-readings"
+        ],
+        "summary": "Preview",
+        "operationId": "preview_api_v1_short_readings__identity__preview_get",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/short-readings/{identity}/open": {
+      "post": {
+        "tags": [
+          "short-readings"
+        ],
+        "summary": "Open Reading",
+        "operationId": "open_reading_api_v1_short_readings__identity__open_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/short-readings/{identity}/progress": {
+      "put": {
+        "tags": [
+          "short-readings"
+        ],
+        "summary": "Progress",
+        "operationId": "progress_api_v1_short_readings__identity__progress_put",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/juya_miniapp_api__modules__short_reading__router__PositionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingProgress"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/short-readings/{identity}/complete": {
+      "post": {
+        "tags": [
+          "short-readings"
+        ],
+        "summary": "Complete",
+        "operationId": "complete_api_v1_short_readings__identity__complete_post",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingCompleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/short-readings/{identity}/resources/{target}/signed-url": {
+      "get": {
+        "tags": [
+          "short-readings"
+        ],
+        "summary": "Resource",
+        "operationId": "resource_api_v1_short_readings__identity__resources__target__signed_url_get",
+        "parameters": [
+          {
+            "name": "identity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identity"
+            }
+          },
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "revision_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Revision Id"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingResourceResponse"
                 }
               }
             }
@@ -3439,6 +4539,150 @@
         ],
         "title": "ClickableSpan"
       },
+      "CompleteRequest": {
+        "properties": {
+          "content_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Content Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_version"
+        ],
+        "title": "CompleteRequest"
+      },
+      "ConfirmedEntry": {
+        "properties": {
+          "entry_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Entry Id"
+          },
+          "entry_type": {
+            "type": "string",
+            "enum": [
+              "word",
+              "chunk"
+            ],
+            "title": "Entry Type"
+          },
+          "sense_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Sense Id"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "entry_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Entry Version",
+            "default": 1
+          },
+          "english": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "English"
+          },
+          "phonetic": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Phonetic",
+            "default": ""
+          },
+          "meaning_zh": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Meaning Zh"
+          },
+          "explanation": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Explanation",
+            "default": ""
+          },
+          "source_sentence": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Source Sentence"
+          },
+          "source_locator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceLocator"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "image_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Asset Id"
+          },
+          "pronunciation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PronunciationReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "legacy_incomplete": {
+            "type": "boolean",
+            "title": "Legacy Incomplete",
+            "default": false
+          },
+          "is_favorited": {
+            "type": "boolean",
+            "title": "Is Favorited",
+            "default": false
+          },
+          "favorite_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Favorite Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "entry_id",
+          "entry_type",
+          "sense_id",
+          "source_id",
+          "english",
+          "meaning_zh",
+          "source_sentence"
+        ],
+        "title": "ConfirmedEntry"
+      },
       "ContactProjectionRequest": {
         "properties": {
           "user_ids": {
@@ -3635,6 +4879,44 @@
             "title": "Timing Confirmed",
             "default": false
           },
+          "boundary_verified_by": {
+            "type": "string",
+            "title": "Boundary Verified By",
+            "default": ""
+          },
+          "slice_target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slice Target Id"
+          },
+          "slice_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slice Version"
+          },
+          "slice_dependency_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slice Dependency Hash"
+          },
           "clickable_spans": {
             "items": {
               "$ref": "#/components/schemas/ClickableSpan"
@@ -3706,6 +4988,371 @@
           "source_locator"
         ],
         "title": "FavoriteRequest"
+      },
+      "FavoriteSnapshotCancelResponse": {
+        "properties": {
+          "favorite_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Favorite Id"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "snapshot_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Snapshot Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "favorite_id",
+          "active",
+          "snapshot_version"
+        ],
+        "title": "FavoriteSnapshotCancelResponse"
+      },
+      "FavoriteSnapshotPageResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FavoriteSnapshotResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor",
+          "has_more"
+        ],
+        "title": "FavoriteSnapshotPageResponse"
+      },
+      "FavoriteSnapshotResponse": {
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "dialogue",
+              "word_card",
+              "SCENE"
+            ],
+            "title": "Content Type"
+          },
+          "content_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Content Id"
+          },
+          "content_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Version"
+          },
+          "entry_type": {
+            "type": "string",
+            "enum": [
+              "word",
+              "chunk"
+            ],
+            "title": "Entry Type"
+          },
+          "entry_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Entry Id"
+          },
+          "sense_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Sense Id"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "schema_version": {
+            "type": "integer",
+            "const": 2,
+            "title": "Schema Version"
+          },
+          "favorite_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Favorite Id"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "snapshot_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Snapshot Version"
+          },
+          "saved_content_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved Content Version"
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id"
+          },
+          "english": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "English"
+          },
+          "phonetic": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Phonetic"
+          },
+          "meaning_zh": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Meaning Zh"
+          },
+          "explanation": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Explanation"
+          },
+          "source_sentence": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Source Sentence"
+          },
+          "source_title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Source Title"
+          },
+          "source_locator": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Source Locator"
+          },
+          "image_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Asset Id"
+          },
+          "pronunciation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PronunciationReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "legacy_incomplete": {
+            "type": "boolean",
+            "title": "Legacy Incomplete"
+          },
+          "missing_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Fields"
+          },
+          "favorited_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Favorited At"
+          },
+          "last_reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reviewed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_type",
+          "content_id",
+          "content_version",
+          "entry_type",
+          "entry_id",
+          "sense_id",
+          "source_id",
+          "schema_version",
+          "favorite_id",
+          "active",
+          "snapshot_version",
+          "saved_content_version",
+          "revision_id",
+          "english",
+          "phonetic",
+          "meaning_zh",
+          "explanation",
+          "source_sentence",
+          "source_title",
+          "source_locator",
+          "image_asset_id",
+          "pronunciation",
+          "legacy_incomplete",
+          "missing_fields",
+          "favorited_at",
+          "last_reviewed_at"
+        ],
+        "title": "FavoriteSnapshotResponse"
+      },
+      "FavoriteSourceResolutionResponse": {
+        "properties": {
+          "saved_content_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved Content Version"
+          },
+          "target_content_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Content Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "EXACT",
+              "UPDATED_OR_UNRESOLVED",
+              "NO_ACCESS"
+            ],
+            "title": "Status"
+          },
+          "locator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceLocator"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "safe_summary": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Safe Summary"
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "dialogue",
+              "word_card",
+              "SCENE"
+            ],
+            "title": "Content Type"
+          },
+          "content_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Content Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "saved_content_version",
+          "target_content_version",
+          "status",
+          "safe_summary",
+          "content_type",
+          "content_id"
+        ],
+        "title": "FavoriteSourceResolutionResponse"
       },
       "FeedbackCreateRequest": {
         "properties": {
@@ -3890,33 +5537,28 @@
         ],
         "title": "LogoutRequest"
       },
-      "PositionRequest": {
+      "Paragraph": {
         "properties": {
-          "client_sequence": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Client Sequence"
-          },
-          "entry_id": {
+          "paragraph_id": {
             "type": "string",
             "maxLength": 64,
             "minLength": 1,
-            "title": "Entry Id"
+            "title": "Paragraph Id"
           },
-          "offset": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Offset",
-            "default": 0
+          "english": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "English"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "client_sequence",
-          "entry_id"
+          "paragraph_id",
+          "english"
         ],
-        "title": "PositionRequest"
+        "title": "Paragraph"
       },
       "PreviewScene": {
         "properties": {
@@ -4017,6 +5659,232 @@
         "type": "object",
         "title": "ProfileUpdate"
       },
+      "PronunciationReference": {
+        "properties": {
+          "target_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Target Id"
+          },
+          "resource_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Version"
+          },
+          "can_prepare": {
+            "type": "boolean",
+            "title": "Can Prepare",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target_id"
+        ],
+        "title": "PronunciationReference"
+      },
+      "PronunciationRequest": {
+        "properties": {
+          "favorite_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Favorite Id"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "dialogue",
+                  "word_card",
+                  "short_reading"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "content_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Id"
+          },
+          "content_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Version"
+          },
+          "entry_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Id"
+          },
+          "sense_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sense Id"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "resource_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PronunciationRequest"
+      },
+      "PronunciationResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "READY",
+              "PREPARING",
+              "FAILED",
+              "UNAVAILABLE"
+            ],
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "resource_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Version"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "can_retry": {
+            "type": "boolean",
+            "title": "Can Retry",
+            "default": false
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "PronunciationResponse"
+      },
       "PublishedScene": {
         "properties": {
           "scene_id": {
@@ -4045,6 +5913,429 @@
           "content"
         ],
         "title": "PublishedScene"
+      },
+      "PublishedSentence": {
+        "properties": {
+          "sentence_id": {
+            "type": "string",
+            "title": "Sentence Id"
+          },
+          "speaker": {
+            "type": "string",
+            "title": "Speaker"
+          },
+          "english": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "English"
+          },
+          "chinese": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Chinese"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Position"
+          },
+          "start_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Ms"
+          },
+          "end_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Ms"
+          },
+          "slice_target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slice Target Id"
+          },
+          "slice_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slice Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sentence_id",
+          "speaker",
+          "english",
+          "chinese",
+          "position"
+        ],
+        "title": "PublishedSentence"
+      },
+      "ReadingCompleteResponse": {
+        "properties": {
+          "progress": {
+            "$ref": "#/components/schemas/ReadingProgress"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "progress",
+          "created"
+        ],
+        "title": "ReadingCompleteResponse"
+      },
+      "ReadingDetail": {
+        "properties": {
+          "content_id": {
+            "type": "string",
+            "title": "Content Id"
+          },
+          "content_type": {
+            "type": "string",
+            "const": "short_reading",
+            "title": "Content Type",
+            "default": "short_reading"
+          },
+          "title_en": {
+            "type": "string",
+            "title": "Title En"
+          },
+          "title_zh": {
+            "type": "string",
+            "title": "Title Zh"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "level": {
+            "type": "string",
+            "title": "Level"
+          },
+          "introduction": {
+            "type": "string",
+            "title": "Introduction"
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "TRIAL",
+              "FORMAL",
+              "LIMITED"
+            ],
+            "title": "Access",
+            "default": "TRIAL"
+          },
+          "content_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Content Version"
+          },
+          "revision_id": {
+            "type": "string",
+            "title": "Revision Id"
+          },
+          "schema_version": {
+            "type": "integer",
+            "const": 2,
+            "title": "Schema Version",
+            "default": 2
+          },
+          "paragraphs_en": {
+            "items": {
+              "$ref": "#/components/schemas/Paragraph"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Paragraphs En"
+          },
+          "translation_zh": {
+            "type": "string",
+            "maxLength": 1000000,
+            "minLength": 1,
+            "title": "Translation Zh"
+          },
+          "whole_audio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WholeAudio"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadingProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_id",
+          "title_en",
+          "title_zh",
+          "category",
+          "topic",
+          "level",
+          "introduction",
+          "content_version",
+          "revision_id",
+          "paragraphs_en",
+          "translation_zh"
+        ],
+        "title": "ReadingDetail"
+      },
+      "ReadingPageResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingPreview"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor",
+          "has_more"
+        ],
+        "title": "ReadingPageResponse"
+      },
+      "ReadingPreview": {
+        "properties": {
+          "content_id": {
+            "type": "string",
+            "title": "Content Id"
+          },
+          "content_type": {
+            "type": "string",
+            "const": "short_reading",
+            "title": "Content Type",
+            "default": "short_reading"
+          },
+          "title_en": {
+            "type": "string",
+            "title": "Title En"
+          },
+          "title_zh": {
+            "type": "string",
+            "title": "Title Zh"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "level": {
+            "type": "string",
+            "title": "Level"
+          },
+          "introduction": {
+            "type": "string",
+            "title": "Introduction"
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "TRIAL",
+              "FORMAL",
+              "LIMITED",
+              "PREVIEW",
+              "NONE"
+            ],
+            "title": "Access",
+            "default": "PREVIEW"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_id",
+          "title_en",
+          "title_zh",
+          "category",
+          "topic",
+          "level",
+          "introduction"
+        ],
+        "title": "ReadingPreview"
+      },
+      "ReadingProgress": {
+        "properties": {
+          "content_id": {
+            "type": "string",
+            "title": "Content Id"
+          },
+          "saved_content_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Saved Content Version"
+          },
+          "paragraph_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paragraph Id"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset",
+            "default": 0
+          },
+          "client_sequence": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Client Sequence",
+            "default": 0
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "last_read_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Read At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_id",
+          "saved_content_version",
+          "started_at",
+          "last_read_at"
+        ],
+        "title": "ReadingProgress"
+      },
+      "ReadingResourceResponse": {
+        "properties": {
+          "resource_id": {
+            "type": "string",
+            "title": "Resource Id"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "resource_id",
+          "url",
+          "expires_at"
+        ],
+        "title": "ReadingResourceResponse",
+        "description": "Preserves the existing resource_id/url/expires_at signed resource shape."
       },
       "RefreshRequest": {
         "properties": {
@@ -4088,6 +6379,31 @@
         ],
         "title": "ResolutionRequest"
       },
+      "ResourceReference": {
+        "properties": {
+          "target_id": {
+            "type": "string",
+            "title": "Target Id"
+          },
+          "resource_version": {
+            "type": "string",
+            "title": "Resource Version"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Duration Ms"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target_id",
+          "resource_version",
+          "duration_ms"
+        ],
+        "title": "ResourceReference"
+      },
       "ReviewRequest": {
         "properties": {
           "card_ids": {
@@ -4096,6 +6412,15 @@
             },
             "type": "array",
             "title": "Card Ids"
+          },
+          "snapshot_schema": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ],
+            "title": "Snapshot Schema",
+            "default": 1
           }
         },
         "additionalProperties": false,
@@ -4107,6 +6432,25 @@
       },
       "SceneContent": {
         "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ],
+            "title": "Schema Version",
+            "default": 1
+          },
+          "template_type": {
+            "type": "string",
+            "enum": [
+              "dialogue",
+              "word_card",
+              "vocabulary"
+            ],
+            "title": "Template Type",
+            "default": "dialogue"
+          },
           "title_en": {
             "type": "string",
             "maxLength": 200,
@@ -4206,6 +6550,109 @@
         "type": "object",
         "title": "SceneContent"
       },
+      "SceneDetail": {
+        "properties": {
+          "content_id": {
+            "type": "string",
+            "title": "Content Id"
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "dialogue",
+              "word_card"
+            ],
+            "title": "Content Type"
+          },
+          "content_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Content Version"
+          },
+          "revision_id": {
+            "type": "string",
+            "title": "Revision Id"
+          },
+          "schema_version": {
+            "type": "integer",
+            "const": 2,
+            "title": "Schema Version",
+            "default": 2
+          },
+          "title_en": {
+            "type": "string",
+            "title": "Title En"
+          },
+          "title_zh": {
+            "type": "string",
+            "title": "Title Zh"
+          },
+          "dialogue": {
+            "items": {
+              "$ref": "#/components/schemas/PublishedSentence"
+            },
+            "type": "array",
+            "title": "Dialogue"
+          },
+          "words": {
+            "items": {
+              "$ref": "#/components/schemas/ConfirmedEntry"
+            },
+            "type": "array",
+            "title": "Words"
+          },
+          "chunks": {
+            "items": {
+              "$ref": "#/components/schemas/ConfirmedEntry"
+            },
+            "type": "array",
+            "title": "Chunks"
+          },
+          "whole_audio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cover_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Asset Id"
+          },
+          "learning_image_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learning Image Asset Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_id",
+          "content_type",
+          "content_version",
+          "revision_id",
+          "title_en",
+          "title_zh"
+        ],
+        "title": "SceneDetail"
+      },
       "SceneOpenResult": {
         "properties": {
           "access": {
@@ -4265,6 +6712,9 @@
                 "$ref": "#/components/schemas/PreviewScene"
               },
               {
+                "$ref": "#/components/schemas/SceneDetail"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -4304,6 +6754,102 @@
           "expires_at"
         ],
         "title": "SignedResource"
+      },
+      "SnapshotCreateReference": {
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "dialogue",
+              "word_card"
+            ],
+            "title": "Content Type"
+          },
+          "content_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Content Id"
+          },
+          "content_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Content Version"
+          },
+          "entry_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "word",
+                  "chunk"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Type"
+          },
+          "entry_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Entry Id"
+          },
+          "sense_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Sense Id"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_type",
+          "content_id",
+          "content_version",
+          "entry_id",
+          "sense_id",
+          "source_id"
+        ],
+        "title": "SnapshotCreateReference"
+      },
+      "SourceLocator": {
+        "properties": {
+          "sentence_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentence Id"
+          },
+          "paragraph_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paragraph Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SourceLocator"
       },
       "SupplementRequest": {
         "properties": {
@@ -4442,6 +6988,31 @@
         ],
         "title": "WechatLoginRequest"
       },
+      "WholeAudio": {
+        "properties": {
+          "target_id": {
+            "type": "string",
+            "title": "Target Id"
+          },
+          "resource_version": {
+            "type": "string",
+            "title": "Resource Version"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Duration Ms"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target_id",
+          "resource_version",
+          "duration_ms"
+        ],
+        "title": "WholeAudio"
+      },
       "juya_miniapp_api__integrations__admin_api__content__SceneEntry": {
         "properties": {
           "entry_id": {
@@ -4457,7 +7028,7 @@
           },
           "english": {
             "type": "string",
-            "maxLength": 500,
+            "maxLength": 10000,
             "title": "English",
             "default": ""
           },
@@ -4526,6 +7097,84 @@
               }
             ],
             "title": "Audio Version Id"
+          },
+          "sense_id": {
+            "type": "string",
+            "title": "Sense Id",
+            "default": ""
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id",
+            "default": ""
+          },
+          "source_sentence": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Source Sentence",
+            "default": ""
+          },
+          "source_locator": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Locator"
+          },
+          "pronunciation_target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pronunciation Target Id"
+          },
+          "pronunciation_text": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Pronunciation Text",
+            "default": ""
+          },
+          "reading_variant": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Reading Variant",
+            "default": ""
+          },
+          "allow_synthesis": {
+            "type": "boolean",
+            "title": "Allow Synthesis",
+            "default": false
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed",
+            "default": false
+          },
+          "meaning_change": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "wording",
+                  "new_sense"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meaning Change"
           }
         },
         "additionalProperties": false,
@@ -4547,7 +7196,7 @@
           },
           "english": {
             "type": "string",
-            "maxLength": 500,
+            "maxLength": 10000,
             "title": "English",
             "default": ""
           },
@@ -4616,6 +7265,70 @@
               }
             ],
             "title": "Audio Version Id"
+          },
+          "sense_id": {
+            "type": "string",
+            "title": "Sense Id",
+            "default": ""
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id",
+            "default": ""
+          },
+          "source_sentence": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Source Sentence",
+            "default": ""
+          },
+          "pronunciation_target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pronunciation Target Id"
+          },
+          "pronunciation_text": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Pronunciation Text",
+            "default": ""
+          },
+          "reading_variant": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Reading Variant",
+            "default": ""
+          },
+          "allow_synthesis": {
+            "type": "boolean",
+            "title": "Allow Synthesis",
+            "default": false
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed",
+            "default": false
+          },
+          "meaning_change": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "wording",
+                  "new_sense"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meaning Change"
           },
           "scene_id": {
             "type": "string",
@@ -4654,6 +7367,75 @@
           "source_locator"
         ],
         "title": "SceneEntry"
+      },
+      "juya_miniapp_api__modules__learning__router__PositionRequest": {
+        "properties": {
+          "client_sequence": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Client Sequence"
+          },
+          "entry_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Entry Id"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Offset",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "client_sequence",
+          "entry_id"
+        ],
+        "title": "PositionRequest"
+      },
+      "juya_miniapp_api__modules__short_reading__router__PositionRequest": {
+        "properties": {
+          "content_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Content Version"
+          },
+          "paragraph_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paragraph Id"
+          },
+          "offset": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "default": 0
+          },
+          "client_sequence": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Client Sequence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_version",
+          "client_sequence"
+        ],
+        "title": "PositionRequest"
       }
     }
   }

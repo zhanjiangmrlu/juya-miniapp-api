@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from juya_miniapp_api.integrations.admin_api.content import SceneContent
-from juya_miniapp_api.integrations.admin_api.content import SceneEntry as ContentEntry
+from juya_miniapp_api.integrations.admin_api.v15_content import SceneDetail
 
 
 class LearningModule(BaseModel):
@@ -60,7 +60,7 @@ class SceneOpenResult(BaseModel):
     sources: list[str] = Field(default_factory=list)
     earliest_expires_at: datetime | None = None
     activated_at: datetime | None = None
-    scene: PublishedScene | PreviewScene | None = None
+    scene: PublishedScene | PreviewScene | SceneDetail | None = None
     authorization_pending: bool = False
 
     @model_validator(mode="after")
@@ -72,12 +72,35 @@ class SceneOpenResult(BaseModel):
         if self.scene is not None:
             if self.access == "PREVIEW" and not isinstance(self.scene, PreviewScene):
                 raise ValueError("Preview access cannot contain published content")
-            if self.access != "PREVIEW" and not isinstance(self.scene, PublishedScene):
+            if self.access != "PREVIEW" and not isinstance(
+                self.scene, (PublishedScene, SceneDetail)
+            ):
                 raise ValueError("Full access requires published content")
         return self
 
 
-class SceneEntry(ContentEntry):
+class SceneEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    entry_id: str = ""
+    entry_version: int = Field(default=1, ge=1)
+    english: str = Field(default="", max_length=10000)
+    variants: list[str] = Field(default_factory=list, max_length=100)
+    phonetic: str = Field(default="", max_length=200)
+    chinese: str = Field(default="", max_length=10000)
+    explanation: str = Field(default="", max_length=10000)
+    source_sentence_ids: list[str] = Field(default_factory=list)
+    icon_asset_id: str | None = None
+    audio_target_id: str | None = None
+    audio_version_id: str | None = None
+    sense_id: str = ""
+    source_id: str = ""
+    source_sentence: str = Field(default="", max_length=10000)
+    pronunciation_target_id: str | None = None
+    pronunciation_text: str = Field(default="", max_length=10000)
+    reading_variant: str = Field(default="", max_length=255)
+    allow_synthesis: bool = False
+    confirmed: bool = False
+    meaning_change: Literal["wording", "new_sense"] | None = None
     scene_id: str
     revision_id: str
     source_locator: str

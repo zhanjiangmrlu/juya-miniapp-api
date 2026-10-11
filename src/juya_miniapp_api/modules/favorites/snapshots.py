@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from juya_miniapp_api.shared.errors import AppError
 from juya_miniapp_api.shared.ids import new_ulid
@@ -21,9 +21,9 @@ class StrictModel(BaseModel):
 
 
 class SnapshotReference(StrictModel):
-    content_type: Literal["dialogue", "word_card"]
+    content_type: Literal["dialogue", "word_card", "SCENE"]
     content_id: str = Field(min_length=1, max_length=64)
-    content_version: int = Field(ge=1)
+    content_version: int | None = Field(default=None, ge=1)
     entry_type: EntryType | None = None
     entry_id: str = Field(min_length=1, max_length=64)
     sense_id: str = Field(min_length=1, max_length=64)
@@ -42,22 +42,33 @@ class PronunciationReference(StrictModel):
 
 
 class ConfirmedSnapshot(StrictModel):
+    _confirmation_credential: dict[str, Any] | None = PrivateAttr(default=None)
     reference: SnapshotReference
-    revision_id: str = Field(min_length=1, max_length=64)
-    english: str = Field(min_length=1, max_length=10000)
+    revision_id: str | None = Field(default=None, min_length=1, max_length=64)
+    english: str = Field(max_length=10000)
     phonetic: str = Field(default="", max_length=200)
-    meaning_zh: str = Field(min_length=1, max_length=10000)
+    meaning_zh: str = Field(max_length=10000)
     explanation: str = Field(default="", max_length=10000)
-    source_sentence: str = Field(min_length=1, max_length=10000)
+    source_sentence: str = Field(max_length=10000)
     source_title: str = Field(max_length=200)
     source_locator: dict[str, str | int]
     image_asset_id: str | None = None
     pronunciation: PronunciationReference | None = None
+    legacy_incomplete: bool = False
+    missing_fields: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def chunk_has_no_image(self) -> "ConfirmedSnapshot":
         if self.reference.entry_type is None:
             raise ValueError("Confirmed snapshot requires an authoritative entry type")
+        if not self.legacy_incomplete and (
+            not self.english
+            or not self.meaning_zh
+            or self.revision_id is None
+            or self.reference.content_version is None
+            or self.reference.content_type == "SCENE"
+        ):
+            raise ValueError("New confirmed snapshots require complete authority")
         if self.reference.entry_type == "chunk" and self.image_asset_id is not None:
             raise ValueError("Chunk snapshots cannot carry display images")
         return self
@@ -68,7 +79,7 @@ class FavoriteSnapshot(StrictModel):
     active: bool
     snapshot_version: int = Field(ge=1)
     snapshot_revision_id: str | None = None
-    saved_content_version: int = Field(ge=1)
+    saved_content_version: int | None = Field(default=None, ge=1)
     favorited_at: datetime
     last_reviewed_at: datetime | None = None
     data: ConfirmedSnapshot
@@ -79,6 +90,11 @@ class SnapshotPage(StrictModel):
     items: list[FavoriteSnapshot]
     next_cursor: str | None
     has_more: bool
+
+
+class SnapshotCreateReference(SnapshotReference):
+    content_type: Literal["dialogue", "word_card"]
+    content_version: int = Field(ge=1)
 
 
 class SnapshotReview(StrictModel):
@@ -262,6 +278,8 @@ class SnapshotService:
         self, user_id: str, ref: SnapshotReference, key: str, now: datetime
     ) -> FavoriteSnapshot:
         self._key(key)
+        if ref.content_type == "SCENE" or ref.content_version is None:
+            raise AppError("CONTENT_REFERENCE_INVALID", "收藏须引用当前确认版本", 422)
 
         # Repository owns the atomic replay/confirmation/write boundary.
         async def confirm() -> ConfirmedSnapshot:

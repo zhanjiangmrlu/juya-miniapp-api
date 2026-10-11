@@ -78,12 +78,27 @@ async def seed_contract(database: str) -> tuple[list[str], list[str], dict, str]
     scene_ids = [new_ulid(now) for _ in range(3)]
     revisions = [new_ulid(now) for _ in range(3)]
     content = published_scene("scene-coffee-shop", {"scene": {}})["scene"]["content"]
-    content["original_image_asset_id"] = image
+    # Published-state fixture only; this is not evidence of real editorial confirmation.
+    content["schema_version"] = 2
+    content["original_image_asset_id"] = None
     content["cover_asset_id"] = image
     content["audio"] = None
     for entry in [*content["vocabulary"], *content["chunks"]]:
         entry["audio_target_id"] = None
         entry["audio_version_id"] = None
+        entry["sense_id"] = entry["entry_id"] + "-sense"
+        entry["source_id"] = entry["entry_id"] + "-source"
+        entry["confirmed"] = True
+        source = next(
+            (
+                sentence
+                for sentence in content["dialogue"]
+                if sentence["id"] in entry.get("source_sentence_ids", [])
+            ),
+            None,
+        )
+        entry["source_locator"] = {"sentence_id": source["id"]} if source else None
+        entry["source_sentence"] = source["english"] if source else ""
     async with sessions() as session, session.begin():
         await session.execute(
             text(
@@ -106,13 +121,13 @@ async def seed_contract(database: str) -> tuple[list[str], list[str], dict, str]
         await session.execute(
             text(
                 "INSERT INTO media_asset(public_id,object_key,asset_type,content_type,"
-                "size_bytes,sha256,status,security_status,created_by,created_at) "
-                "VALUES(:id,:key,'images','image/png',1,:hash,'CONFIRMED','SKIPPED','acceptance',:now)"
+                "size_bytes,sha256,status,security_status,width,height,created_by,created_at) "
+                "VALUES(:id,:key,'images','image/png',1,:hash,'CONFIRMED','SKIPPED',1,1,'acceptance',:now)"
             ),
             {
                 "id": image,
-                "key": f"sealed/media/{image}.png",
-                "hash": secrets.token_hex(32),
+                "key": f"sealed/media/images/{image}.png",
+                "hash": "0" * 64,
                 "now": now,
             },
         )
@@ -207,7 +222,7 @@ def test_normal_runtime_over_socket_closes_miniapp_user_flows(tmp_path: Path) ->
                 "admin",
                 str(ADMIN / ".venv/Scripts/python.exe"),
                 ADMIN,
-                "juya_admin_api.main:app",
+                "socket_admin_runtime_app:app",
                 admin_port,
             ),
             ("mini", sys.executable, ROOT, "socket_runtime_app:app", mini_port),
@@ -278,7 +293,7 @@ def test_normal_runtime_over_socket_closes_miniapp_user_flows(tmp_path: Path) ->
                 f"/api/v1/scenes/{scene}/resources/{image}/signed-url",
                 params={"revision_id": revision},
             )
-            assert resource.status_code == 200 and "expires_at" in resource.json()
+            assert resource.status_code == 200 and "expires_at" in resource.json(), resource.text
             assert (
                 client.get(
                     f"/api/v1/scenes/{scene}/resources/{image}/signed-url",
@@ -302,6 +317,19 @@ def test_normal_runtime_over_socket_closes_miniapp_user_flows(tmp_path: Path) ->
             assert favorite.status_code == 201, favorite.text
             assert favorite.json()["sources"][0]["entry_snapshot"]["chinese"] == "拿铁咖啡"
             assert client.get("/api/v1/favorites").json()["items"]
+            detail_after = client.post(
+                f"/api/v1/scenes/{scene}/open", headers={"Idempotency-Key": "open-favorited"}
+            )
+            assert detail_after.status_code == 200, detail_after.text
+            saved_word = next(
+                word
+                for word in detail_after.json()["scene"]["words"]
+                if word["entry_id"] == "word-latte"
+            )
+            assert saved_word["is_favorited"] and saved_word["favorite_id"] == favorite.json()["id"]
+            bank = client.get("/api/v1/favorite-snapshots")
+            assert bank.status_code == 200 and bank.json()["items"][0]["meaning_zh"] == "拿铁咖啡"
+            assert bank.headers["cache-control"] == "no-store"
             for item in scene_ids:
                 completed = client.post(
                     f"/api/v1/scenes/{item}/complete",
@@ -385,6 +413,7 @@ def test_normal_runtime_over_socket_closes_miniapp_user_flows(tmp_path: Path) ->
                 == 204
             )
             assert client.get("/api/v1/favorites").json()["items"] == []
+            assert client.get("/api/v1/favorite-snapshots").json()["items"] == []
             deletion = client.post("/api/v1/me/deletion")
             assert deletion.status_code == 202, deletion.text
             assert client.get("/api/v1/me").json()["deletion"]["status"] == "PENDING"

@@ -18,6 +18,7 @@ class UserRepository(Protocol):
         #     public_id: 当前操作所属用户账号的公开标识
         # 返回:注销申请公开标识、状态与时间字段;无申请时为None
         ...
+
     async def get_profile(self, public_id: str) -> UserProfile | None:
         # 功能:读取用户账号与昵称头像资料
         # 参数:
@@ -206,9 +207,16 @@ class SQLAlchemyUserRepository:
                 (
                     await session.execute(
                         text(
-                            "SELECT f.entry_type,COUNT(*) AS total FROM favorite_entry f "
+                            "SELECT entries.entry_type,COUNT(*) AS total FROM ("
+                            "SELECT CASE WHEN f.entry_type IN ('word','VOCABULARY') "
+                            "THEN 'VOCABULARY' ELSE 'PHRASE' END AS entry_type "
+                            "FROM favorite_snapshot f "
                             "JOIN user_account u ON u.id=f.user_id "
-                            "WHERE u.public_id=:user GROUP BY f.entry_type"
+                            "WHERE u.public_id=:user AND f.active=1 UNION ALL "
+                            "SELECT f.entry_type FROM favorite_entry f "
+                            "JOIN user_account u ON u.id=f.user_id WHERE u.public_id=:user "
+                            "AND NOT EXISTS(SELECT 1 FROM favorite_legacy_map m "
+                            "WHERE m.legacy_favorite_id=f.id)) entries GROUP BY entries.entry_type"
                         ),
                         {"user": public_id},
                     )

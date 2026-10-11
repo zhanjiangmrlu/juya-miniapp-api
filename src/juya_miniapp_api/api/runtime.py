@@ -30,7 +30,8 @@ from juya_miniapp_api.infrastructure.security.service_hmac import (
     ServicePrincipal,
     verify_request_signature,
 )
-from juya_miniapp_api.integrations.admin_api.client import AdminApiClient
+from juya_miniapp_api.integrations.admin_api.v15_client import AdminV15Client
+from juya_miniapp_api.integrations.admin_api.v15_guard import FinalFactsGuard
 from juya_miniapp_api.integrations.oss.avatar import AvatarStore
 from juya_miniapp_api.integrations.oss.credentials import ControlledCredentialsProvider
 from juya_miniapp_api.integrations.oss.upload import OssUploadService
@@ -46,9 +47,13 @@ from juya_miniapp_api.modules.checkins.router import create_checkins_router
 from juya_miniapp_api.modules.contacts.repository import SQLAlchemyContactRepository
 from juya_miniapp_api.modules.contacts.router import create_contacts_router
 from juya_miniapp_api.modules.contacts.service import ContactService
+from juya_miniapp_api.modules.favorites.compatibility import LegacyFavoriteAdapter
 from juya_miniapp_api.modules.favorites.repository import SQLAlchemyFavoriteRepository
 from juya_miniapp_api.modules.favorites.router import create_favorites_router
 from juya_miniapp_api.modules.favorites.service import FavoriteService
+from juya_miniapp_api.modules.favorites.snapshot_router import create_snapshot_router
+from juya_miniapp_api.modules.favorites.snapshots import SnapshotService
+from juya_miniapp_api.modules.favorites.snapshots_sql import SQLAlchemySnapshotRepository
 from juya_miniapp_api.modules.feedback.router import create_feedback_router
 from juya_miniapp_api.modules.feedback.service import FeedbackService
 from juya_miniapp_api.modules.learning.access_router import create_content_access_router
@@ -60,9 +65,20 @@ from juya_miniapp_api.modules.learning.catalog_service import CatalogService
 from juya_miniapp_api.modules.learning.repository import SQLAlchemyLearningRepository
 from juya_miniapp_api.modules.learning.router import create_learning_router
 from juya_miniapp_api.modules.learning.service import LearningService
+from juya_miniapp_api.modules.learning.v15_authority import V15SceneAuthority
 from juya_miniapp_api.modules.messages.repository import SQLAlchemyMessageRepository
 from juya_miniapp_api.modules.messages.router import create_messages_router
 from juya_miniapp_api.modules.messages.service import MessageService
+from juya_miniapp_api.modules.pronunciation.adapters import (
+    CurrentContentAdapter,
+    SnapshotReviewAdapter,
+)
+from juya_miniapp_api.modules.pronunciation.router import create_pronunciation_router
+from juya_miniapp_api.modules.pronunciation.service import PronunciationService
+from juya_miniapp_api.modules.short_reading.authority import V15ReadingAuthority
+from juya_miniapp_api.modules.short_reading.router import create_short_reading_router
+from juya_miniapp_api.modules.short_reading.service import ShortReadingService
+from juya_miniapp_api.modules.short_reading.sql_repository import SQLAlchemyReadingRepository
 from juya_miniapp_api.modules.users.repository import SQLAlchemyUserRepository
 from juya_miniapp_api.modules.users.router import create_users_router
 from juya_miniapp_api.modules.users.service import UserService
@@ -194,7 +210,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         # 返回:HTTP响应对象
         return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
-    admin = AdminApiClient(
+    admin = AdminV15Client(
         admin_http,
         secret=_required(settings.internal_hmac_secret, "internal_hmac_secret").encode(),
     )
@@ -203,9 +219,27 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
     learning_overviews = SQLAlchemyLearningOverviewRepository(sessions)
     catalog_service = CatalogService(admin, cache)
     learning_service = LearningService(learning_repository, catalog_service)
-    access_service = AccessService(admin, SQLAlchemyOpenHistory(learning_repository))
+    facts_guard = FinalFactsGuard(
+        _required(settings.internal_hmac_secret, "internal_hmac_secret").encode()
+    )
+    snapshot_repository = SQLAlchemySnapshotRepository(sessions, facts_guard.snapshot)
+    snapshots = SnapshotService(snapshot_repository, admin)
+    scene_authority = V15SceneAuthority(sessions, admin)
+    reading_authority = V15ReadingAuthority(sessions, admin)
+    reading_service = ShortReadingService(
+        reading_authority, SQLAlchemyReadingRepository(sessions, facts_guard.reading)
+    )
+    pronunciation = PronunciationService(
+        SnapshotReviewAdapter(snapshots), CurrentContentAdapter(scene_authority), admin
+    )
+    access_service = AccessService(
+        admin, SQLAlchemyOpenHistory(learning_repository), scene_authority, snapshot_repository
+    )
     favorite_repository = SQLAlchemyFavoriteRepository(sessions)
     favorite_service = FavoriteService(favorite_repository, access_service)
+    legacy_favorites = LegacyFavoriteAdapter(
+        snapshots, snapshot_repository, favorite_repository, scene_authority
+    )
     message_service = MessageService(SQLAlchemyMessageRepository(sessions))
     feedback_service = FeedbackService(admin, require_review=settings.content_security_enabled)
     uploads = OssUploadService(
@@ -266,6 +300,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
             catalog=catalog_service,
             messages=message_service,
             favorites=favorite_repository,
+            snapshots=snapshots,
         ),
         create_content_access_router(catalog_service, access_service, user_dependency=current_user),
         create_favorites_router(
@@ -273,6 +308,14 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
             favorite_repository,
             user_dependency=current_user,
             catalog=catalog_service,
+            snapshots=snapshots,
+            snapshot_repository=snapshot_repository,
+            compatibility=legacy_favorites,
+        ),
+        create_snapshot_router(snapshots, user_dependency=current_user, resolver=legacy_favorites),
+        create_pronunciation_router(pronunciation, user_dependency=current_user),
+        create_short_reading_router(
+            reading_service, reading_authority, user_dependency=current_user
         ),
         create_messages_router(message_service, user_dependency=current_user),
         create_feedback_router(
@@ -305,7 +348,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         #     无形参。
         # 返回:依赖名称到就绪状态的映射
         try:
-            checks = dict(await check_minimum_schema_version(sessions, 16))
+            checks = dict(await check_minimum_schema_version(sessions, 17))
         except Exception:
             checks = {"mysql": False, "schema": False}
         try:

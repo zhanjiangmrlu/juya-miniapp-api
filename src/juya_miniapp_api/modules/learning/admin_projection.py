@@ -95,9 +95,14 @@ class SQLAlchemyLearningOverviewRepository:
                             "(SELECT COUNT(DISTINCT d.beijing_date) FROM daily_checkin d "
                             "JOIN user_account checkin_user ON checkin_user.id = d.user_id "
                             "WHERE checkin_user.public_id = :public_id) AS learning_days, "
+                            "((SELECT COUNT(*) FROM favorite_snapshot f "
+                            "JOIN user_account favorite_user ON favorite_user.id = f.user_id "
+                            "WHERE favorite_user.public_id = :public_id AND f.active=1) + "
                             "(SELECT COUNT(*) FROM favorite_entry f "
                             "JOIN user_account favorite_user ON favorite_user.id = f.user_id "
-                            "WHERE favorite_user.public_id = :public_id) AS favorite_count"
+                            "WHERE favorite_user.public_id = :public_id "
+                            "AND NOT EXISTS(SELECT 1 FROM favorite_legacy_map m "
+                            "WHERE m.legacy_favorite_id=f.id))) AS favorite_count"
                         ),
                         {"public_id": user_id},
                     )

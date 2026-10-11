@@ -78,9 +78,7 @@ class AuthRepository(Protocol):
         # 返回:无返回值。
         ...
 
-    async def validate_access_session(
-        self, user_id: str, session_id: str, now: datetime
-    ) -> None:
+    async def validate_access_session(self, user_id: str, session_id: str, now: datetime) -> None:
         # 功能:校验访问凭证对应会话仍有效且账号允许访问
         # 参数:
         #     self: 当前用户微信身份与登录会话仓库实例

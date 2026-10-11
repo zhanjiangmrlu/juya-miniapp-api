@@ -10,6 +10,7 @@ from juya_miniapp_api.modules.checkins.service import (
     summarize_checkins,
 )
 from juya_miniapp_api.modules.favorites.repository import SQLAlchemyFavoriteRepository
+from juya_miniapp_api.modules.favorites.snapshots import SnapshotService
 from juya_miniapp_api.modules.learning.catalog_service import CatalogService
 from juya_miniapp_api.modules.learning.domain import TodayTask
 from juya_miniapp_api.modules.learning.repository import SQLAlchemyLearningRepository
@@ -30,6 +31,7 @@ def create_checkins_router(
     catalog: CatalogService | None = None,
     messages: MessageService | None = None,
     favorites: SQLAlchemyFavoriteRepository | None = None,
+    snapshots: SnapshotService | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> APIRouter:
     # 功能:创建并绑定打卡首页路由与业务依赖
@@ -110,7 +112,17 @@ def create_checkins_router(
                 if scene_id in accessible and scene_id not in history_ids
             ]
             review_cards: list[TodayTask] = []
-            if favorites is not None:
+            if snapshots is not None:
+                snapshot_cursor = None
+                while True:
+                    page = await snapshots.page(user_id, None, snapshot_cursor, 100)
+                    review_cards.extend(
+                        TodayTask("FAVORITE_CARD", item.favorite_id) for item in page.items
+                    )
+                    if not page.has_more:
+                        break
+                    snapshot_cursor = page.next_cursor
+            elif favorites is not None:
                 cursor = None
                 while True:
                     batch = await favorites.list_favorites(user_id, after_id=cursor, limit=100)
@@ -127,7 +139,11 @@ def create_checkins_router(
                 "kind": today_task.kind,
                 "target_id": today_task.target_id,
                 "card_ids": list(today_task.card_ids),
-                "review_queue_url": "/api/v1/reviews/queue"
+                "review_queue_url": (
+                    "/api/v1/reviews/queue?snapshot_schema=2"
+                    if snapshots
+                    else "/api/v1/reviews/queue"
+                )
                 if today_task.kind == "FAVORITE_REVIEW"
                 else None,
             }

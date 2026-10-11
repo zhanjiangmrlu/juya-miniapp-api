@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from juya_miniapp_api.infrastructure.analytics_events import append_event
 from juya_miniapp_api.modules.favorites.snapshots_sql import (
     dbtime,
     json_value,
@@ -69,6 +70,14 @@ class SQLAlchemyReadingRepository:
             position = preserved_position(old, version, paragraphs)
             row = next_progress(content_id, old, position, now)
             await self._write(session, internal_user, row)
+            if old is None:
+                await append_event(
+                    session,
+                    event_key=f"reading:start:{user_id}:{content_id}",
+                    event_type="SHORT_READING_STARTED",
+                    user_id=internal_user,
+                    occurred_at=now,
+                )
             return row
 
     async def save(
@@ -124,6 +133,14 @@ class SQLAlchemyReadingRepository:
             row = next_progress(content_id, old, position, now, complete=True)
             await self._write(session, internal_user, row)
             result = ReadingCompletion(**row.model_dump(), created=created)
+            if created:
+                await append_event(
+                    session,
+                    event_key=f"reading:complete:{user_id}:{content_id}",
+                    event_type="SHORT_READING_COMPLETED",
+                    user_id=internal_user,
+                    occurred_at=now,
+                )
             await session.execute(
                 text(
                     "INSERT INTO user_command_dedup "

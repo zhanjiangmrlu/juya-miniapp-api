@@ -43,6 +43,14 @@ def create_account_cleanup_handler(
         # 参数:
         #     event: 需要投递或断言的跨域清理发件箱事件
         # 返回:无返回值。
+        if event.event_type == "FAVORITE_RESOURCE_REFERENCE":
+            if (
+                event.payload.get("event_id") != event.id
+                or event.payload.get("favorite_id") != event.aggregate_id
+            ):
+                raise AppError("OUTBOX_PAYLOAD_INVALID", "资源引用事件标识不一致", 422)
+            await client.project_favorite_reference(event.payload)
+            return
         if event.event_type != "ACCOUNT_DELETION_CLEANUP":
             raise AppError("OUTBOX_EVENT_UNSUPPORTED", "不支持的异步事件", 422)
         user_id = cast(str | None, event.payload.get("user_id"))

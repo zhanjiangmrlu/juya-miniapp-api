@@ -108,7 +108,7 @@ class ShortReadingDetail(StrictModel):
 
 
 class SourceResolution(StrictModel):
-    saved_content_version: int
+    saved_content_version: int | None
     target_content_version: int | None
     status: Literal["EXACT", "UPDATED_OR_UNRESOLVED", "NO_ACCESS"]
     locator: SourceLocator | None = None

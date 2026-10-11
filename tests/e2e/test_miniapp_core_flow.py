@@ -20,7 +20,7 @@ def runtime_settings() -> Settings:
         database_url="mysql+asyncmy://user:pass@localhost/juya",
         redis_url="redis://localhost:6379/0",
         admin_api_base_url="http://admin.test",
-        internal_hmac_secret="internal-secret",
+        internal_hmac_secret="internal-secret-test",
         jwt_secret="jwt-secret",
         field_encryption_key_base64=key,
         field_lookup_key="lookup-secret",

@@ -2,9 +2,10 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from juya_miniapp_api.modules.favorites.compatibility import LegacyFavoriteAdapter
 from juya_miniapp_api.modules.favorites.domain import FavoriteEntry
 from juya_miniapp_api.modules.favorites.repository import SQLAlchemyFavoriteRepository
 from juya_miniapp_api.modules.favorites.service import FavoriteService
@@ -74,6 +75,7 @@ def create_favorites_router(
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     snapshots: SnapshotService | None = None,
     snapshot_repository: SQLAlchemySnapshotRepository | None = None,
+    compatibility: LegacyFavoriteAdapter | None = None,
 ) -> APIRouter:
     # 功能:创建并绑定收藏复习路由与业务依赖
     # 参数:
@@ -87,6 +89,7 @@ def create_favorites_router(
 
     @router.get("/favorites")
     async def favorites(
+        response: Response,
         user_id: Annotated[str, Depends(user_dependency)],
         cursor: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
@@ -97,6 +100,9 @@ def create_favorites_router(
         #     cursor: 分页游标;空值从第一页开始
         #     limit: 本次查询或任务领取允许的最大记录数量
         # 返回:收藏列表、下一页游标与是否还有后续页
+        response.headers["Cache-Control"] = "private, no-store"
+        if compatibility is not None:
+            return await compatibility.listing(user_id, cursor, limit)
         items = await repository.list_favorites(user_id, after_id=cursor, limit=limit + 1)
         visible = items[:limit]
         return {
@@ -107,6 +113,7 @@ def create_favorites_router(
 
     @router.get("/reviews/queue")
     async def review_queue(
+        response: Response,
         user_id: Annotated[str, Depends(user_dependency)],
         cursor: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
@@ -120,6 +127,7 @@ def create_favorites_router(
         #     limit: 本次查询或任务领取允许的最大记录数量
         # 返回:可复习收藏列表、下一页游标与是否还有后续页
         if snapshot_schema == 2:
+            response.headers["Cache-Control"] = "private, no-store"
             if snapshots is None:
                 raise AppError("ADMIN_API_UNAVAILABLE", "收藏服务暂时不可用", 503)
             page = await snapshots.page(user_id, entry_type, cursor, limit)
@@ -128,6 +136,9 @@ def create_favorites_router(
                 "next_cursor": page.next_cursor,
                 "has_more": page.has_more,
             }
+        response.headers["Cache-Control"] = "private, no-store"
+        if compatibility is not None:
+            return await compatibility.listing(user_id, cursor, limit)
         items = await repository.list_favorites(user_id, after_id=cursor, limit=limit + 1)
         visible = items[:limit]
         return {
@@ -139,13 +150,20 @@ def create_favorites_router(
     @router.post("/favorites", status_code=201)
     async def create_favorite(
         payload: FavoriteRequest,
+        response: Response,
         user_id: Annotated[str, Depends(user_dependency)],
+        idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     ) -> dict[str, object]:
         # 功能:创建收藏并固定发布版本、词条内容和来源快照
         # 参数:
         #     payload: 已校验的收藏词条类别、发布版本与来源定位
         #     user_id: 当前操作所属用户的公开标识
         # 返回:新建或合并后的收藏记录与固定版本来源快照
+        response.headers["Cache-Control"] = "private, no-store"
+        if compatibility is not None:
+            return await compatibility.create(
+                user_id, payload.model_dump(), clock(), idempotency_key
+            )
         return _favorite(
             await service.favorite(
                 user_id,
@@ -164,6 +182,7 @@ def create_favorites_router(
     @router.get("/favorites/{favorite_id}")
     async def favorite_detail(
         favorite_id: str,
+        response: Response,
         user_id: Annotated[str, Depends(user_dependency)],
     ) -> dict[str, object]:
         # 功能:读取收藏详情并生成有权访问的来源链接
@@ -171,6 +190,11 @@ def create_favorites_router(
         #     favorite_id: 当前用户收藏记录的公开标识
         #     user_id: 当前操作所属用户的公开标识
         # 返回:收藏内容、固定发布版本来源与有权打开的原文链接
+        response.headers["Cache-Control"] = "private, no-store"
+        if compatibility is not None:
+            modern = await compatibility.detail(user_id, favorite_id)
+            if modern is not None:
+                return modern
         accessible_scene_ids: set[str] = set()
         favorite = await repository.get(user_id, favorite_id)
         if favorite is not None and catalog is not None:
@@ -198,7 +222,10 @@ def create_favorites_router(
         #     favorite_id: 当前用户收藏记录的公开标识
         #     user_id: 当前操作所属用户的公开标识
         # 返回:无返回值。
-        await service.delete(user_id, favorite_id)
+        if compatibility is not None:
+            await compatibility.delete(user_id, favorite_id, clock())
+        else:
+            await service.delete(user_id, favorite_id)
 
     @router.post("/reviews", status_code=201)
     async def create_review(
@@ -212,12 +239,17 @@ def create_favorites_router(
         #     user_id: 当前操作所属用户的公开标识
         #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
         # 返回:复习会话标识、类型、开始时间、卡片数量与固定卡片标识
-        if payload.snapshot_schema == 2:
+        if payload.snapshot_schema == 2 or compatibility is not None:
             if snapshot_repository is None:
                 raise AppError("ADMIN_API_UNAVAILABLE", "收藏服务暂时不可用", 503)
             return (
                 await snapshot_repository.create_review(
-                    user_id, payload.card_ids, idempotency_key, clock()
+                    user_id,
+                    await compatibility.review_ids(user_id, payload.card_ids)
+                    if compatibility is not None and payload.snapshot_schema == 1
+                    else payload.card_ids,
+                    idempotency_key,
+                    clock(),
                 )
             ).model_dump()
         review = await service.create_review(user_id, payload.card_ids, idempotency_key, clock())

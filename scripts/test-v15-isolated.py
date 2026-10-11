@@ -82,7 +82,8 @@ def main() -> int:
                     mysql_name,
                     "sh",
                     "-c",
-                    'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --protocol=socket -uroot -e "SELECT 1"',
+                    'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" '
+                    'mysql --protocol=tcp -h127.0.0.1 -uroot -e "SELECT 1"',
                 ]
             )
             if not ping.returncode:
@@ -105,7 +106,7 @@ def main() -> int:
             input=sql,
         )
         if result.returncode:
-            raise RuntimeError("Private database creation failed")
+            raise RuntimeError("Private database creation failed: " + safe(result.stderr))
         address = port(mysql_name, "3306/tcp")
         url = "mysql+pymysql://root:" + quote(password, safe="") + "@" + address + "/" + database
         redis_url = "redis://" + port(redis_name, "6379/tcp") + "/0"

@@ -3,13 +3,19 @@ from typing import Any, Protocol
 
 from juya_miniapp_api.integrations.admin_api.client import AdminApiUnavailable
 from juya_miniapp_api.integrations.admin_api.schemas import (
+    PublishedScene,
     SceneEntry,
     SceneOpenResult,
     SignedMedia,
     SignedResource,
 )
+from juya_miniapp_api.modules.learning.detail_aggregation import (
+    FavoriteStates,
+    attach_favorite_states,
+)
 from juya_miniapp_api.modules.learning.domain import ReadingPosition
 from juya_miniapp_api.modules.learning.repository import SQLAlchemyLearningRepository
+from juya_miniapp_api.modules.learning.v15_authority import V15SceneAuthority
 from juya_miniapp_api.shared.errors import AppError
 
 
@@ -165,7 +171,13 @@ class SQLAlchemyOpenHistory:
 
 
 class AccessService:
-    def __init__(self, client: SceneAccessClient, history: OpenHistory) -> None:
+    def __init__(
+        self,
+        client: SceneAccessClient,
+        history: OpenHistory,
+        v15: V15SceneAuthority | None = None,
+        favorites: FavoriteStates | None = None,
+    ) -> None:
         # 功能:初始化已发布场景和媒体访问授权服务并保存所需依赖与配置
         # 参数:
         #     self: 当前已发布场景和媒体访问授权服务实例
@@ -174,6 +186,8 @@ class AccessService:
         # 返回:无返回值。
         self._client = client
         self._history = history
+        self._v15 = v15
+        self._favorites = favorites
 
     async def open_scene(
         self,
@@ -202,6 +216,20 @@ class AccessService:
             if now >= normalized:
                 return SceneOpenResult(authorization_pending=True)
         if result.access != "PREVIEW":
+            if (
+                self._v15 is not None
+                and isinstance(result.scene, PublishedScene)
+                and result.scene.content.schema_version == 2
+            ):
+                detail = await self._v15.open_scene(user_id, scene_id)
+                if (detail.revision_id, detail.content_version) != (
+                    result.scene.revision_id,
+                    result.scene.content_version,
+                ):
+                    raise AppError("CONTENT_VERSION_CONFLICT", "内容已更新,请重新打开", 409)
+                if self._favorites is not None:
+                    detail = await attach_favorite_states(user_id, detail, self._favorites)
+                result = result.model_copy(update={"scene": detail})
             await self._history.record_open(user_id, scene_id, now)
         return result
 
@@ -266,6 +294,8 @@ class AccessService:
         #     revision_id: 需要访问或固定的场景发布修订标识
         #     now: 本次操作的当前时间,用于有效期、时间戳及业务记录
         # 返回:固定场景发布版本的资源签名链接
+        if self._v15 is not None and await self._v15.is_v15(scene_id):
+            return await self._v15.signed_resource(user_id, scene_id, resource_id, revision_id, now)
         try:
             result = await self._client.get_signed_resource(
                 user_id, scene_id, resource_id, revision_id

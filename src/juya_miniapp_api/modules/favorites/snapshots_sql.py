@@ -31,6 +31,7 @@ SELECT f.*, r.content_type, r.content_id, r.saved_content_version, r.revision_id
        r.english, r.phonetic, r.meaning_zh, r.explanation, r.source_sentence,
        r.source_locator, r.safe_title_en, r.safe_title_zh, r.image_asset_id,
        r.pronunciation_target_id, r.resource_version,
+       r.legacy_incomplete, r.missing_fields,
        t.allow_synthesis, t.status AS pronunciation_status
 FROM favorite_snapshot f
 JOIN favorite_snapshot_revision r ON r.public_id=f.current_snapshot_revision_id
@@ -330,10 +331,19 @@ class SQLAlchemySnapshotRepository:
                         text(
                             SELECT_SNAPSHOT
                             + " WHERE u.public_id=:user AND u.status='ACTIVE' AND f.active=1 "
-                            "AND f.public_id>:after AND (:kind IS NULL OR f.entry_type=:kind) "
+                            "AND f.public_id>:after AND (:kind IS NULL OR f.entry_type=:kind "
+                            "OR f.entry_type=:legacy_kind) "
                             "ORDER BY f.public_id LIMIT :limit"
                         ),
-                        {"user": user_id, "after": after or "", "kind": entry_type, "limit": limit},
+                        {
+                            "user": user_id,
+                            "after": after or "",
+                            "kind": entry_type,
+                            "limit": limit,
+                            "legacy_kind": {"word": "VOCABULARY", "chunk": "PHRASE"}.get(
+                                entry_type or ""
+                            ),
+                        },
                     )
                 )
                 .mappings()
@@ -580,7 +590,9 @@ class SQLAlchemySnapshotRepository:
                 content_type=row["content_type"],
                 content_id=row["content_id"],
                 content_version=row["saved_content_version"],
-                entry_type=row["entry_type"],
+                entry_type={"VOCABULARY": "word", "PHRASE": "chunk"}.get(
+                    row["entry_type"], row["entry_type"]
+                ),
                 entry_id=row["entry_id"],
                 sense_id=row["sense_id"],
                 source_id=row["source_id"],
@@ -594,6 +606,8 @@ class SQLAlchemySnapshotRepository:
             source_title=row["safe_title_zh"],
             source_locator=json_value(row["source_locator"]) or {},
             image_asset_id=row["image_asset_id"],
+            legacy_incomplete=bool(row["legacy_incomplete"]),
+            missing_fields=json_value(row["missing_fields"]) or [],
             pronunciation=PronunciationReference(
                 target_id=target,
                 resource_version=row["resource_version"],
@@ -618,6 +632,14 @@ class SQLAlchemySnapshotRepository:
     async def _reference(
         session: AsyncSession, row: FavoriteSnapshot, revision_id: str, now: datetime
     ) -> None:
+        if (
+            (row.data.revision_id is None or row.data.legacy_incomplete)
+            and row.data.image_asset_id is None
+            and row.data.pronunciation is None
+        ):
+            # Missing historical facts cannot form a resource reference; no fixed
+            # asset is being retained or released. Preserve explicit missing data.
+            return
         previous = await session.scalar(
             text(
                 "SELECT sequence FROM favorite_resource_reference WHERE favorite_id=:fid FOR UPDATE"

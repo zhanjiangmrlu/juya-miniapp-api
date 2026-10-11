@@ -60,6 +60,7 @@ class FakeCatalogClient:
         # 返回:无返回值。
         self.module_calls = 0
         self.catalog_calls = 0
+        self.enabled = True
 
     async def get_modules(self) -> list[LearningModule]:
         # 功能:在测试中获取学习模块定义与目录版本信息
@@ -67,7 +68,7 @@ class FakeCatalogClient:
         #     self: 当前场景学习的FakeCatalogClient实例
         # 返回:学习模块定义集合
         self.module_calls += 1
-        return [LearningModule(key="scene_learning", title="场景学习")]
+        return [LearningModule(key="scene_learning", title="场景学习", enabled=self.enabled)]
 
     async def get_catalog(self, user_id: str, summary: object) -> LearningCatalog:
         # 功能:在测试中获取带用户摘要和授权信息的学习目录
@@ -78,7 +79,7 @@ class FakeCatalogClient:
         # 返回:学习目录、用户摘要和权限信息
         del user_id, summary
         self.catalog_calls += 1
-        return LearningCatalog(items=[{"scene_id": "scene-1"}])
+        return LearningCatalog(items=[{"scene_id": "scene-1"}] if self.enabled else [])
 
     async def batch_access(self, user_id: str, scene_ids: object) -> list[AccessProjection]:
         # 功能:在测试中批量向管理端查询用户的场景访问权限
@@ -104,7 +105,9 @@ class FakeCatalogClient:
 
 
 @pytest.mark.asyncio
-async def test_catalog_cache_uses_version_and_never_exceeds_entitlement() -> None:
+async def test_catalog_refreshes_module_and_publication_without_entitlement_version_change() -> (
+    None
+):
     # 功能:验证目录缓存按版本隔离且不超过授权期限
     # 参数:
     #     无形参。
@@ -117,12 +120,15 @@ async def test_catalog_cache_uses_version_and_never_exceeds_entitlement() -> Non
     # 返回: 测试预设的带UTC时区时间
     service = CatalogService(client, JsonCache(redis), clock=lambda: NOW)
 
-    assert len(await service.modules()) == 1
+    assert (await service.modules())[0].enabled
     assert len(await service.modules()) == 1
     first = await service.catalog("user-1", {})
+    client.enabled = False
     second = await service.catalog("user-1", {})
+    assert not (await service.modules())[0].enabled
 
-    assert client.module_calls == 1
-    assert client.catalog_calls == 1
-    assert first == second
-    assert redis.ttls["juya:cache:learning-catalog:v2:user-1"] == 8
+    assert client.module_calls == 3
+    assert client.catalog_calls == 2
+    assert first.items == [{"scene_id": "scene-1"}]
+    assert second.items == []
+    assert redis.ttls == {}

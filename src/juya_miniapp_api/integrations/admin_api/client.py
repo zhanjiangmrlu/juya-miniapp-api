@@ -348,6 +348,14 @@ class AdminApiClient:
             idempotency_header="X-Event-Id",
         )
 
+    async def project_favorite_reference(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self._request_json(
+            "POST",
+            "/internal/v1/favorite-resource-projections",
+            payload,
+            idempotency_key=str(payload["event_id"]),
+        )
+
     async def _request_json(
         self,
         method: str,

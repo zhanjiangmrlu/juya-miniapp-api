@@ -484,6 +484,195 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/favorite-snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listing */
+        get: operations["listing_api_v1_favorite_snapshots_get"];
+        put?: never;
+        /** Create */
+        post: operations["create_api_v1_favorite_snapshots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/favorite-snapshots/{favorite_id}/source-resolution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Source */
+        get: operations["source_api_v1_favorite_snapshots__favorite_id__source_resolution_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/favorite-snapshots/{favorite_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detail */
+        get: operations["detail_api_v1_favorite_snapshots__favorite_id__get"];
+        put?: never;
+        post?: never;
+        /** Cancel */
+        delete: operations["cancel_api_v1_favorite_snapshots__favorite_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pronunciations/{target_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve */
+        post: operations["resolve_api_v1_pronunciations__target_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pronunciations/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poll */
+        get: operations["poll_api_v1_pronunciations_tasks__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/short-readings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listing */
+        get: operations["listing_api_v1_short_readings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/short-readings/{identity}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview */
+        get: operations["preview_api_v1_short_readings__identity__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/short-readings/{identity}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open Reading */
+        post: operations["open_reading_api_v1_short_readings__identity__open_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/short-readings/{identity}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Progress */
+        put: operations["progress_api_v1_short_readings__identity__progress_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/short-readings/{identity}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete */
+        post: operations["complete_api_v1_short_readings__identity__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/short-readings/{identity}/resources/{target}/signed-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resource */
+        get: operations["resource_api_v1_short_readings__identity__resources__target__signed_url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/messages": {
         parameters: {
             query?: never;
@@ -948,6 +1137,62 @@ export interface components {
             /** Source Locator */
             source_locator: string;
         };
+        /** CompleteRequest */
+        CompleteRequest: {
+            /** Content Version */
+            content_version: number;
+        };
+        /** ConfirmedEntry */
+        ConfirmedEntry: {
+            /** Entry Id */
+            entry_id: string;
+            /**
+             * Entry Type
+             * @enum {string}
+             */
+            entry_type: "word" | "chunk";
+            /** Sense Id */
+            sense_id: string;
+            /** Source Id */
+            source_id: string;
+            /**
+             * Entry Version
+             * @default 1
+             */
+            entry_version: number;
+            /** English */
+            english: string;
+            /**
+             * Phonetic
+             * @default
+             */
+            phonetic: string;
+            /** Meaning Zh */
+            meaning_zh: string;
+            /**
+             * Explanation
+             * @default
+             */
+            explanation: string;
+            /** Source Sentence */
+            source_sentence: string;
+            source_locator?: components["schemas"]["SourceLocator"] | null;
+            /** Image Asset Id */
+            image_asset_id?: string | null;
+            pronunciation?: components["schemas"]["PronunciationReference"] | null;
+            /**
+             * Legacy Incomplete
+             * @default false
+             */
+            legacy_incomplete: boolean;
+            /**
+             * Is Favorited
+             * @default false
+             */
+            is_favorited: boolean;
+            /** Favorite Id */
+            favorite_id?: string | null;
+        };
         /** ContactProjectionRequest */
         ContactProjectionRequest: {
             /** User Ids */
@@ -1027,6 +1272,17 @@ export interface components {
              * @default false
              */
             timing_confirmed: boolean;
+            /**
+             * Boundary Verified By
+             * @default
+             */
+            boundary_verified_by: string;
+            /** Slice Target Id */
+            slice_target_id?: string | null;
+            /** Slice Version */
+            slice_version?: string | null;
+            /** Slice Dependency Hash */
+            slice_dependency_hash?: string | null;
             /** Clickable Spans */
             clickable_spans?: components["schemas"]["ClickableSpan"][];
         };
@@ -1051,6 +1307,116 @@ export interface components {
             sentence_snapshot: string;
             /** Source Locator */
             source_locator: string;
+        };
+        /** FavoriteSnapshotCancelResponse */
+        FavoriteSnapshotCancelResponse: {
+            /** Favorite Id */
+            favorite_id: string;
+            /** Active */
+            active: boolean;
+            /** Snapshot Version */
+            snapshot_version: number;
+        };
+        /** FavoriteSnapshotPageResponse */
+        FavoriteSnapshotPageResponse: {
+            /** Items */
+            items: components["schemas"]["FavoriteSnapshotResponse"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Has More */
+            has_more: boolean;
+        };
+        /** FavoriteSnapshotResponse */
+        FavoriteSnapshotResponse: {
+            /**
+             * Content Type
+             * @enum {string}
+             */
+            content_type: "dialogue" | "word_card" | "SCENE";
+            /** Content Id */
+            content_id: string;
+            /** Content Version */
+            content_version: number | null;
+            /**
+             * Entry Type
+             * @enum {string}
+             */
+            entry_type: "word" | "chunk";
+            /** Entry Id */
+            entry_id: string;
+            /** Sense Id */
+            sense_id: string;
+            /** Source Id */
+            source_id: string;
+            /**
+             * Schema Version
+             * @constant
+             */
+            schema_version: 2;
+            /** Favorite Id */
+            favorite_id: string;
+            /** Active */
+            active: boolean;
+            /** Snapshot Version */
+            snapshot_version: number;
+            /** Saved Content Version */
+            saved_content_version: number | null;
+            /** Revision Id */
+            revision_id: string | null;
+            /** English */
+            english: string;
+            /** Phonetic */
+            phonetic: string;
+            /** Meaning Zh */
+            meaning_zh: string;
+            /** Explanation */
+            explanation: string;
+            /** Source Sentence */
+            source_sentence: string;
+            /** Source Title */
+            source_title: string;
+            /** Source Locator */
+            source_locator: {
+                [key: string]: string | number;
+            };
+            /** Image Asset Id */
+            image_asset_id: string | null;
+            pronunciation: components["schemas"]["PronunciationReference"] | null;
+            /** Legacy Incomplete */
+            legacy_incomplete: boolean;
+            /** Missing Fields */
+            missing_fields: string[];
+            /**
+             * Favorited At
+             * Format: date-time
+             */
+            favorited_at: string;
+            /** Last Reviewed At */
+            last_reviewed_at: string | null;
+        };
+        /** FavoriteSourceResolutionResponse */
+        FavoriteSourceResolutionResponse: {
+            /** Saved Content Version */
+            saved_content_version: number | null;
+            /** Target Content Version */
+            target_content_version: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "EXACT" | "UPDATED_OR_UNRESOLVED" | "NO_ACCESS";
+            locator?: components["schemas"]["SourceLocator"] | null;
+            /** Safe Summary */
+            safe_summary: {
+                [key: string]: string;
+            };
+            /**
+             * Content Type
+             * @enum {string}
+             */
+            content_type: "dialogue" | "word_card" | "SCENE";
+            /** Content Id */
+            content_id: string;
         };
         /** FeedbackCreateRequest */
         FeedbackCreateRequest: {
@@ -1116,17 +1482,12 @@ export interface components {
             /** Session Id */
             session_id: string;
         };
-        /** PositionRequest */
-        PositionRequest: {
-            /** Client Sequence */
-            client_sequence: number;
-            /** Entry Id */
-            entry_id: string;
-            /**
-             * Offset
-             * @default 0
-             */
-            offset: number;
+        /** Paragraph */
+        Paragraph: {
+            /** Paragraph Id */
+            paragraph_id: string;
+            /** English */
+            english: string;
         };
         /** PreviewScene */
         PreviewScene: {
@@ -1164,6 +1525,60 @@ export interface components {
             /** Avatar Object Key */
             avatar_object_key?: string | null;
         };
+        /** PronunciationReference */
+        PronunciationReference: {
+            /** Target Id */
+            target_id: string;
+            /** Resource Version */
+            resource_version?: string | null;
+            /**
+             * Can Prepare
+             * @default false
+             */
+            can_prepare: boolean;
+        };
+        /** PronunciationRequest */
+        PronunciationRequest: {
+            /** Favorite Id */
+            favorite_id?: string | null;
+            /** Content Type */
+            content_type?: ("dialogue" | "word_card" | "short_reading") | null;
+            /** Content Id */
+            content_id?: string | null;
+            /** Content Version */
+            content_version?: number | null;
+            /** Entry Id */
+            entry_id?: string | null;
+            /** Sense Id */
+            sense_id?: string | null;
+            /** Source Id */
+            source_id?: string | null;
+            /** Resource Version */
+            resource_version?: string | null;
+        };
+        /** PronunciationResponse */
+        PronunciationResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "READY" | "PREPARING" | "FAILED" | "UNAVAILABLE";
+            /** Url */
+            url?: string | null;
+            /** Resource Version */
+            resource_version?: string | null;
+            /** Task Id */
+            task_id?: string | null;
+            /**
+             * Can Retry
+             * @default false
+             */
+            can_retry: boolean;
+            /** Code */
+            code?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
+        };
         /** PublishedScene */
         PublishedScene: {
             /** Scene Id */
@@ -1173,6 +1588,166 @@ export interface components {
             /** Content Version */
             content_version: number;
             content: components["schemas"]["SceneContent"];
+        };
+        /** PublishedSentence */
+        PublishedSentence: {
+            /** Sentence Id */
+            sentence_id: string;
+            /** Speaker */
+            speaker: string;
+            /** English */
+            english: string;
+            /** Chinese */
+            chinese: string;
+            /** Position */
+            position: number;
+            /** Start Ms */
+            start_ms?: number | null;
+            /** End Ms */
+            end_ms?: number | null;
+            /** Slice Target Id */
+            slice_target_id?: string | null;
+            /** Slice Version */
+            slice_version?: string | null;
+        };
+        /** ReadingCompleteResponse */
+        ReadingCompleteResponse: {
+            progress: components["schemas"]["ReadingProgress"];
+            /** Created */
+            created: boolean;
+        };
+        /** ReadingDetail */
+        ReadingDetail: {
+            /** Content Id */
+            content_id: string;
+            /**
+             * Content Type
+             * @default short_reading
+             * @constant
+             */
+            content_type: "short_reading";
+            /** Title En */
+            title_en: string;
+            /** Title Zh */
+            title_zh: string;
+            /** Category */
+            category: string;
+            /** Topic */
+            topic: string;
+            /** Level */
+            level: string;
+            /** Introduction */
+            introduction: string;
+            /** Cover Url */
+            cover_url?: string | null;
+            /**
+             * Access
+             * @default TRIAL
+             * @enum {string}
+             */
+            access: "TRIAL" | "FORMAL" | "LIMITED";
+            /** Content Version */
+            content_version: number;
+            /** Revision Id */
+            revision_id: string;
+            /**
+             * Schema Version
+             * @default 2
+             * @constant
+             */
+            schema_version: 2;
+            /** Paragraphs En */
+            paragraphs_en: components["schemas"]["Paragraph"][];
+            /** Translation Zh */
+            translation_zh: string;
+            whole_audio?: components["schemas"]["WholeAudio"] | null;
+            progress?: components["schemas"]["ReadingProgress"] | null;
+        };
+        /** ReadingPageResponse */
+        ReadingPageResponse: {
+            /** Items */
+            items: components["schemas"]["ReadingPreview"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Has More */
+            has_more: boolean;
+        };
+        /** ReadingPreview */
+        ReadingPreview: {
+            /** Content Id */
+            content_id: string;
+            /**
+             * Content Type
+             * @default short_reading
+             * @constant
+             */
+            content_type: "short_reading";
+            /** Title En */
+            title_en: string;
+            /** Title Zh */
+            title_zh: string;
+            /** Category */
+            category: string;
+            /** Topic */
+            topic: string;
+            /** Level */
+            level: string;
+            /** Introduction */
+            introduction: string;
+            /** Cover Url */
+            cover_url?: string | null;
+            /**
+             * Access
+             * @default PREVIEW
+             * @enum {string}
+             */
+            access: "TRIAL" | "FORMAL" | "LIMITED" | "PREVIEW" | "NONE";
+        };
+        /** ReadingProgress */
+        ReadingProgress: {
+            /** Content Id */
+            content_id: string;
+            /** Saved Content Version */
+            saved_content_version: number;
+            /** Paragraph Id */
+            paragraph_id?: string | null;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Client Sequence
+             * @default 0
+             */
+            client_sequence: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Last Read At
+             * Format: date-time
+             */
+            last_read_at: string;
+            /** Completed At */
+            completed_at?: string | null;
+        };
+        /**
+         * ReadingResourceResponse
+         * @description Preserves the existing resource_id/url/expires_at signed resource shape.
+         */
+        ReadingResourceResponse: {
+            /** Resource Id */
+            resource_id: string;
+            /** Url */
+            url: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
         };
         /** RefreshRequest */
         RefreshRequest: {
@@ -1186,13 +1761,40 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** ResourceReference */
+        ResourceReference: {
+            /** Target Id */
+            target_id: string;
+            /** Resource Version */
+            resource_version: string;
+            /** Duration Ms */
+            duration_ms: number;
+        };
         /** ReviewRequest */
         ReviewRequest: {
             /** Card Ids */
             card_ids: string[];
+            /**
+             * Snapshot Schema
+             * @default 1
+             * @enum {integer}
+             */
+            snapshot_schema: 1 | 2;
         };
         /** SceneContent */
         SceneContent: {
+            /**
+             * Schema Version
+             * @default 1
+             * @enum {integer}
+             */
+            schema_version: 1 | 2;
+            /**
+             * Template Type
+             * @default dialogue
+             * @enum {string}
+             */
+            template_type: "dialogue" | "word_card" | "vocabulary";
             /**
              * Title En
              * @default
@@ -1232,6 +1834,41 @@ export interface components {
             /** Chunks */
             chunks?: components["schemas"]["juya_miniapp_api__integrations__admin_api__content__SceneEntry"][];
         };
+        /** SceneDetail */
+        SceneDetail: {
+            /** Content Id */
+            content_id: string;
+            /**
+             * Content Type
+             * @enum {string}
+             */
+            content_type: "dialogue" | "word_card";
+            /** Content Version */
+            content_version: number;
+            /** Revision Id */
+            revision_id: string;
+            /**
+             * Schema Version
+             * @default 2
+             * @constant
+             */
+            schema_version: 2;
+            /** Title En */
+            title_en: string;
+            /** Title Zh */
+            title_zh: string;
+            /** Dialogue */
+            dialogue?: components["schemas"]["PublishedSentence"][];
+            /** Words */
+            words?: components["schemas"]["ConfirmedEntry"][];
+            /** Chunks */
+            chunks?: components["schemas"]["ConfirmedEntry"][];
+            whole_audio?: components["schemas"]["ResourceReference"] | null;
+            /** Cover Asset Id */
+            cover_asset_id?: string | null;
+            /** Learning Image Asset Id */
+            learning_image_asset_id?: string | null;
+        };
         /** SceneOpenResult */
         SceneOpenResult: {
             /** Access */
@@ -1243,7 +1880,7 @@ export interface components {
             /** Activated At */
             activated_at?: string | null;
             /** Scene */
-            scene?: components["schemas"]["PublishedScene"] | components["schemas"]["PreviewScene"] | null;
+            scene?: components["schemas"]["PublishedScene"] | components["schemas"]["PreviewScene"] | components["schemas"]["SceneDetail"] | null;
             /**
              * Authorization Pending
              * @default false
@@ -1262,10 +1899,39 @@ export interface components {
              */
             expires_at: string;
         };
+        /** SnapshotCreateReference */
+        SnapshotCreateReference: {
+            /**
+             * Content Type
+             * @enum {string}
+             */
+            content_type: "dialogue" | "word_card";
+            /** Content Id */
+            content_id: string;
+            /** Content Version */
+            content_version: number;
+            /** Entry Type */
+            entry_type?: ("word" | "chunk") | null;
+            /** Entry Id */
+            entry_id: string;
+            /** Sense Id */
+            sense_id: string;
+            /** Source Id */
+            source_id: string;
+        };
+        /** SourceLocator */
+        SourceLocator: {
+            /** Sentence Id */
+            sentence_id?: string | null;
+            /** Paragraph Id */
+            paragraph_id?: string | null;
+        };
         /** SupplementRequest */
         SupplementRequest: {
             /** Text */
             text: string;
+            /** Screenshots */
+            screenshots?: string[];
         };
         /** UserSearchRequest */
         UserSearchRequest: {
@@ -1300,6 +1966,15 @@ export interface components {
             code: string;
             /** Device */
             device: string;
+        };
+        /** WholeAudio */
+        WholeAudio: {
+            /** Target Id */
+            target_id: string;
+            /** Resource Version */
+            resource_version: string;
+            /** Duration Ms */
+            duration_ms: number;
         };
         /** SceneEntry */
         juya_miniapp_api__integrations__admin_api__content__SceneEntry: {
@@ -1343,6 +2018,49 @@ export interface components {
             audio_target_id?: string | null;
             /** Audio Version Id */
             audio_version_id?: string | null;
+            /**
+             * Sense Id
+             * @default
+             */
+            sense_id: string;
+            /**
+             * Source Id
+             * @default
+             */
+            source_id: string;
+            /**
+             * Source Sentence
+             * @default
+             */
+            source_sentence: string;
+            /** Source Locator */
+            source_locator?: {
+                [key: string]: string;
+            } | null;
+            /** Pronunciation Target Id */
+            pronunciation_target_id?: string | null;
+            /**
+             * Pronunciation Text
+             * @default
+             */
+            pronunciation_text: string;
+            /**
+             * Reading Variant
+             * @default
+             */
+            reading_variant: string;
+            /**
+             * Allow Synthesis
+             * @default false
+             */
+            allow_synthesis: boolean;
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /** Meaning Change */
+            meaning_change?: ("wording" | "new_sense") | null;
         };
         /** SceneEntry */
         juya_miniapp_api__integrations__admin_api__schemas__SceneEntry: {
@@ -1386,6 +2104,45 @@ export interface components {
             audio_target_id?: string | null;
             /** Audio Version Id */
             audio_version_id?: string | null;
+            /**
+             * Sense Id
+             * @default
+             */
+            sense_id: string;
+            /**
+             * Source Id
+             * @default
+             */
+            source_id: string;
+            /**
+             * Source Sentence
+             * @default
+             */
+            source_sentence: string;
+            /** Pronunciation Target Id */
+            pronunciation_target_id?: string | null;
+            /**
+             * Pronunciation Text
+             * @default
+             */
+            pronunciation_text: string;
+            /**
+             * Reading Variant
+             * @default
+             */
+            reading_variant: string;
+            /**
+             * Allow Synthesis
+             * @default false
+             */
+            allow_synthesis: boolean;
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /** Meaning Change */
+            meaning_change?: ("wording" | "new_sense") | null;
             /** Scene Id */
             scene_id: string;
             /** Revision Id */
@@ -1399,6 +2156,32 @@ export interface components {
              * @default
              */
             sentence_snapshot: string;
+        };
+        /** PositionRequest */
+        juya_miniapp_api__modules__learning__router__PositionRequest: {
+            /** Client Sequence */
+            client_sequence: number;
+            /** Entry Id */
+            entry_id: string;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+        };
+        /** PositionRequest */
+        juya_miniapp_api__modules__short_reading__router__PositionRequest: {
+            /** Content Version */
+            content_version: number;
+            /** Paragraph Id */
+            paragraph_id?: string | null;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /** Client Sequence */
+            client_sequence: number;
         };
     };
     responses: never;
@@ -1798,7 +2581,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PositionRequest"];
+                "application/json": components["schemas"]["juya_miniapp_api__modules__learning__router__PositionRequest"];
             };
         };
         responses: {
@@ -2298,6 +3081,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "Idempotency-Key"?: string | null;
                 Authorization?: string | null;
             };
             path?: never;
@@ -2336,6 +3120,8 @@ export interface operations {
             query?: {
                 cursor?: string | null;
                 limit?: number;
+                snapshot_schema?: 1 | 2;
+                entry_type?: ("word" | "chunk") | null;
             };
             header?: {
                 Authorization?: string | null;
@@ -2494,6 +3280,468 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listing_api_v1_favorite_snapshots_get: {
+        parameters: {
+            query?: {
+                entry_type?: ("word" | "chunk") | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                Authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavoriteSnapshotPageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_api_v1_favorite_snapshots_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                Authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnapshotCreateReference"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavoriteSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_api_v1_favorite_snapshots__favorite_id__source_resolution_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+            };
+            path: {
+                favorite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavoriteSourceResolutionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detail_api_v1_favorite_snapshots__favorite_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+            };
+            path: {
+                favorite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavoriteSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_api_v1_favorite_snapshots__favorite_id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                Authorization?: string | null;
+            };
+            path: {
+                favorite_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavoriteSnapshotCancelResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_api_v1_pronunciations__target_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+            };
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PronunciationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PronunciationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    poll_api_v1_pronunciations_tasks__task_id__get: {
+        parameters: {
+            query?: {
+                favorite_id?: string | null;
+                content_type?: ("dialogue" | "word_card" | "short_reading") | null;
+                content_id?: string | null;
+                content_version?: number | null;
+                entry_id?: string | null;
+                sense_id?: string | null;
+                source_id?: string | null;
+                resource_version?: string | null;
+                target_id?: string | null;
+            };
+            header?: {
+                Authorization?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PronunciationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listing_api_v1_short_readings_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                Authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_api_v1_short_readings__identity__preview_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+            };
+            path: {
+                identity: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_reading_api_v1_short_readings__identity__open_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+            };
+            path: {
+                identity: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    progress_api_v1_short_readings__identity__progress_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+            };
+            path: {
+                identity: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["juya_miniapp_api__modules__short_reading__router__PositionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingProgress"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_api_v1_short_readings__identity__complete_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                Authorization?: string | null;
+            };
+            path: {
+                identity: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingCompleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resource_api_v1_short_readings__identity__resources__target__signed_url_get: {
+        parameters: {
+            query: {
+                revision_id: string;
+            };
+            header?: {
+                Authorization?: string | null;
+            };
+            path: {
+                identity: string;
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingResourceResponse"];
                 };
             };
             /** @description Validation Error */
