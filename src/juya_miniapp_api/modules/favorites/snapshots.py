@@ -14,6 +14,7 @@ from juya_miniapp_api.shared.errors import AppError
 from juya_miniapp_api.shared.ids import new_ulid
 
 EntryType = Literal["word", "chunk"]
+SnapshotIdentity = tuple[str, str, str, str, str, str]
 
 
 class StrictModel(BaseModel):
@@ -29,10 +30,17 @@ class SnapshotReference(StrictModel):
     sense_id: str = Field(min_length=1, max_length=64)
     source_id: str = Field(min_length=1, max_length=64)
 
-    def identity(self) -> tuple[str, str, str, str]:
+    def identity(self) -> SnapshotIdentity:
         if self.entry_type is None:
             raise ValueError("Entry type must come from a confirmed entry")
-        return self.entry_type, self.entry_id, self.sense_id, self.source_id
+        return (
+            self.content_type,
+            self.content_id,
+            self.entry_type,
+            self.entry_id,
+            self.sense_id,
+            self.source_id,
+        )
 
 
 class PronunciationReference(StrictModel):
@@ -136,8 +144,8 @@ class SnapshotRepository(Protocol):
     ) -> list[FavoriteSnapshot]: ...
 
     async def states(
-        self, user_id: str, identities: list[tuple[str, str, str, str]]
-    ) -> dict[tuple[str, str, str, str], str]: ...
+        self, user_id: str, identities: list[SnapshotIdentity]
+    ) -> dict[SnapshotIdentity, str]: ...
 
 
 def request_digest(value: object) -> str:
@@ -150,7 +158,7 @@ class InMemorySnapshotRepository:
     """Behavior test adapter. Production uses the admin-owned SQL schema."""
 
     def __init__(self) -> None:
-        self.rows: dict[tuple[str, tuple[str, str, str, str]], FavoriteSnapshot] = {}
+        self.rows: dict[tuple[str, SnapshotIdentity], FavoriteSnapshot] = {}
         self.operations: dict[tuple[str, str, str], tuple[str, FavoriteSnapshot]] = {}
         self.events: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
@@ -262,8 +270,8 @@ class InMemorySnapshotRepository:
         )[:limit]
 
     async def states(
-        self, user_id: str, identities: list[tuple[str, str, str, str]]
-    ) -> dict[tuple[str, str, str, str], str]:
+        self, user_id: str, identities: list[SnapshotIdentity]
+    ) -> dict[SnapshotIdentity, str]:
         selected = set(identities)
         return {
             identity: row.favorite_id

@@ -365,7 +365,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         #     无形参。
         # 返回:依赖名称到就绪状态的映射
         try:
-            checks = dict(await check_minimum_schema_version(sessions, 18))
+            checks = dict(await check_minimum_schema_version(sessions, 19))
         except Exception:
             checks = {"mysql": False, "schema": False}
         try:

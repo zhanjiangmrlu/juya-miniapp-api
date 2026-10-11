@@ -149,9 +149,14 @@ def main() -> int:
         print(safe(str(error)))
         return 1
     finally:
+        cleanup_failed = False
         for name in reversed(created):
             # Names are created above in this invocation, UUID-bound and never user-supplied.
-            run(["docker", "rm", "-f", name])
+            if run(["docker", "rm", "-f", "-v", name]).returncode:
+                cleanup_failed = True
+        print(json.dumps({"scope": "isolated-bff", "owned_resources_cleaned": not cleanup_failed}))
+        if cleanup_failed:
+            raise RuntimeError("Private container cleanup failed")
 
 
 if __name__ == "__main__":

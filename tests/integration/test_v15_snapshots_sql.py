@@ -33,6 +33,111 @@ class Authority:
 
 
 @pytest.mark.asyncio
+async def test_mysql_two_content_scopes_concurrent_save_cancel_and_recollect() -> None:
+    url = os.getenv("JUYA_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("isolated MySQL required")
+    engine = create_engine(url.replace("mysql+pymysql://", "mysql+asyncmy://"))
+    sessions = create_session_factory(engine)
+    user = new_ulid(NOW)
+
+    async def guard(session, owner, data):
+        assert owner == user
+
+    try:
+        async with sessions() as session, session.begin():
+            await session.execute(
+                text(
+                    "INSERT INTO user_account(public_id,juya_number,status) "
+                    "VALUES(:id,:number,'ACTIVE')"
+                ),
+                {"id": user, "number": "JY" + user[-12:]},
+            )
+        repo = SQLAlchemySnapshotRepository(sessions, guard)
+        service = SnapshotService(repo, Authority())
+        refs = [
+            SnapshotReference(
+                content_type=kind,
+                content_id="same-content-id",
+                content_version=1,
+                entry_type="word",
+                entry_id="medium",
+                sense_id="cup",
+                source_id="same-source",
+            )
+            for kind in ("dialogue", "word_card")
+        ]
+        rows = await asyncio.gather(
+            *[
+                service.create(user, ref, f"save-{scope}-{retry}", NOW)
+                for scope, ref in enumerate(refs)
+                for retry in range(5)
+            ]
+        )
+        ids = [rows[0].favorite_id, rows[5].favorite_id]
+        assert ids[0] != ids[1]
+        assert {row.favorite_id for row in rows[:5]} == {ids[0]}
+        assert {row.favorite_id for row in rows[5:]} == {ids[1]}
+        for scope, ref in enumerate(refs):
+            repeated = await service.create(
+                user, ref.model_copy(update={"content_version": 2}), f"active-v2-{scope}", NOW
+            )
+            assert repeated.favorite_id == ids[scope]
+            assert repeated.saved_content_version == repeated.snapshot_version == 1
+        await asyncio.gather(
+            *[
+                service.cancel(user, favorite_id, f"cancel-{scope}-{retry}", NOW)
+                for scope, favorite_id in enumerate(ids)
+                for retry in range(3)
+            ]
+        )
+        assert (await service.page(user, None, None, 100)).items == []
+        restored = await asyncio.gather(
+            *[
+                service.create(
+                    user,
+                    ref.model_copy(update={"content_version": 2}),
+                    f"restore-{scope}-{retry}",
+                    NOW,
+                )
+                for scope, ref in enumerate(refs)
+                for retry in range(3)
+            ]
+        )
+        assert {row.favorite_id for row in restored[:3]} == {ids[0]}
+        assert {row.favorite_id for row in restored[3:]} == {ids[1]}
+        assert all(row.saved_content_version == row.snapshot_version == 2 for row in restored)
+        assert len((await service.page(user, None, None, 100)).items) == 2
+        async with sessions() as session:
+            assert (
+                await session.scalar(
+                    text(
+                        "SELECT COUNT(*) FROM favorite_snapshot_revision "
+                        "WHERE favorite_id IN (SELECT id FROM favorite_snapshot "
+                        "WHERE public_id IN (:first,:second))"
+                    ),
+                    {"first": ids[0], "second": ids[1]},
+                )
+                == 4
+            )
+            assert (
+                await session.scalar(
+                    text(
+                        "SELECT COUNT(*) FROM miniapp_outbox WHERE aggregate_id IN (:first,:second)"
+                    ),
+                    {"first": ids[0], "second": ids[1]},
+                )
+                == 6
+            )
+    finally:
+        async with sessions() as session, session.begin():
+            await session.execute(
+                text("DELETE FROM user_account WHERE public_id=:user"), {"user": user}
+            )
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_mysql_snapshot_concurrency_cancel_revision_events_and_atomic_guard() -> None:
     url = os.getenv("JUYA_TEST_DATABASE_URL")
     if not url:

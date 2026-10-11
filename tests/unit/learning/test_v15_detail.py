@@ -31,11 +31,12 @@ def payload() -> dict:
 class States:
     calls = 0
 
-    async def states(self, user: str, identities: list[tuple[str, str, str, str]]) -> dict:
+    async def states(self, user: str, identities: list[tuple[str, ...]]) -> dict:
         self.calls += 1
         assert user == "user"
         assert len(identities) == 2
-        return {("word", "entry-cup", "cup", "source-cup"): "favorite-cup"}
+        assert identities[0][:2] == ("word_card", "scene")
+        return {("word_card", "scene", "word", "entry-cup", "cup", "source-cup"): "favorite-cup"}
 
 
 @pytest.mark.asyncio

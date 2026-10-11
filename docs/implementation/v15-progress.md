@@ -3,7 +3,7 @@
 - 分支：feature/v1.5-20261011；起始 HEAD：d3fadeba6c6d00c7d55caefde31d63cc18b3f551。
 - 独占仓库：juya-miniapp-api。共享迁移、服务重启及根目录文档由协调对话处理。
 - 依据：20261011 完整需求、技术方案 00/02/05/06/07/08；执行 executing-plans，保留既有身份、联系方式和反馈编排。
-- 当前阶段：本仓新增代码和公开契约本轮收尾完成，录音新旧版、资料入口配置、安全封面、排序/历史、固定收藏媒体及可靠释放事件已通过完整隔离门禁；冻结JSON/TS供消费者同步。根接口文档、前端固定fixture及最终真实页面联调由协调对话负责。
+- 当前阶段：V1.5主体与公开契约已交付；最终页面联调发现的跨内容收藏身份串用已修复并通过定向单元、真实SQL/Socket及静态门禁。运行最低schema现为0019；公开JSON/TS结构与冻结哈希不变。最终四项目页面复验由协调对话负责，详细证据见本文末尾及v15-content-namespace-followup.md。
 
 ## 任务
 
@@ -176,3 +176,11 @@ Ruling: 沿用用户指定feature分支和本进度ledger，必要独立子任�
 - 最终代码/公共契约冻结：`b38294b fix(v1.5): 闭合旧录音资料入口与历史资源释放契约`。JSON和TS提交blob SHA及工作区字节一致，详见v15-contract-handoff.md；前置能力提交a9a97b8/c9e2f14/17a6552。后续仅记录此证据的文档提交不改变契约。
 
 - 哈希核验更正：JSON生成时Windows把LF转为CRLF，最初工作区SHA与Git原始blob SHA不同，但语义一致。已将当前交付文件按提交LF字节统一，JSON正式blob SHA为6c6105d3b3d0e201b3824ecef796e38a595bc30e574b7b87aa3c04f049c4e780；TS仍0c2824feec6b89e6f3470572dcb16cb30bebcdcf860e86430e082eff3da255fc。两个工作区文件现在与提交原始字节一致，OpenAPI快照定向复核通过。未来以Git blob（LF）作为跨平台冻结哈希。
+
+## 最终页面联调跟进：内容范围收藏身份
+
+对话/词卡同条目标识引起的收藏ID串用与复习422已定位并修复；稳定身份及详情状态均补齐content_type/content_id，版本不进入身份，原授权/取消/幂等/复习约束保持。最低运行schema提高0019；管理端拥有迁移，本仓未操作共享数据库。详见v15-content-namespace-followup.md。
+
+本次新证据：定向单元及OpenAPI快照57 passed；私有真实跨内容Socket及既有收藏SQL2 passed；管理权威/HMAC链1 passed；Ruff通过、229文件格式通过、mypy131源文件无错误。独立评审无新增确证P1/P2，私有资源清理确认成功。此前378项为修复前历史门禁，未重跑整库；公开契约结构与blob哈希不变。待协调任务进行最终页面复验。
+
+补充两scope并发SQL后，同一新私有环境复验跨内容Socket、收藏SQL（既有及新增）和HMAC链：4 passed，9.34s，owned_resources_cleaned=true。各scope并发保存仅产生一个独立ID；有效v2请求保持v1，取消后并发v2重收同ID且版本2，只产生正确修订和outbox数量。相关单元57项及全部静态检查再次通过，准确测试路径见跟进文档。

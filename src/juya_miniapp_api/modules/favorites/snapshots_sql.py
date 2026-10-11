@@ -1,4 +1,4 @@
-"""SQL persistence for the admin-owned 0017 snapshot tables."""
+"""SQL persistence for the admin-owned 0019 content-scoped snapshot tables."""
 
 import json
 from collections.abc import Awaitable, Callable
@@ -16,6 +16,7 @@ from juya_miniapp_api.modules.favorites.snapshots import (
     EntryType,
     FavoriteSnapshot,
     PronunciationReference,
+    SnapshotIdentity,
     SnapshotReference,
     SnapshotReview,
     SnapshotService,
@@ -27,7 +28,8 @@ from juya_miniapp_api.shared.ids import new_ulid
 SnapshotGuard = Callable[[AsyncSession, str, ConfirmedSnapshot], Awaitable[None]]
 
 SELECT_SNAPSHOT = """
-SELECT f.*, r.content_type, r.content_id, r.saved_content_version, r.revision_id,
+SELECT f.*, r.content_type AS saved_content_type, r.content_id AS saved_content_id,
+       r.saved_content_version, r.revision_id,
        r.english, r.phonetic, r.meaning_zh, r.explanation, r.source_sentence,
        r.source_locator, r.safe_title_en, r.safe_title_zh, r.image_asset_id,
        r.pronunciation_target_id, r.resource_version,
@@ -35,6 +37,7 @@ SELECT f.*, r.content_type, r.content_id, r.saved_content_version, r.revision_id
        t.allow_synthesis, t.status AS pronunciation_status
 FROM favorite_snapshot f
 JOIN favorite_snapshot_revision r ON r.public_id=f.current_snapshot_revision_id
+                                AND r.favorite_id=f.id
 JOIN user_account u ON u.id=f.user_id
 LEFT JOIN pronunciation_target t ON t.public_id=r.pronunciation_target_id
 """
@@ -164,6 +167,8 @@ class SQLAlchemySnapshotRepository:
             await self.guard(session, user_id, data)
             identity = {
                 "user": internal_user,
+                "content_type": ref.content_type,
+                "content_id": ref.content_id,
                 "kind": ref.entry_type,
                 "entry": ref.entry_id,
                 "sense": ref.sense_id,
@@ -174,7 +179,8 @@ class SQLAlchemySnapshotRepository:
                     await session.execute(
                         text(
                             "SELECT id,public_id,active,snapshot_version FROM favorite_snapshot "
-                            "WHERE user_id=:user AND entry_type=:kind AND entry_id=:entry "
+                            "WHERE user_id=:user AND content_type=:content_type "
+                            "AND content_id=:content_id AND entry_type=:kind AND entry_id=:entry "
                             "AND sense_id=:sense AND source_id=:source FOR UPDATE"
                         ),
                         identity,
@@ -194,9 +200,11 @@ class SQLAlchemySnapshotRepository:
                 if current is None:
                     await session.execute(
                         text(
-                            "INSERT INTO favorite_snapshot(public_id,user_id,entry_type,entry_id,"
+                            "INSERT INTO favorite_snapshot(public_id,user_id,content_type,"
+                            "content_id,entry_type,entry_id,"
                             "sense_id,source_id,active,snapshot_version,favorited_at) "
-                            "VALUES(:fid,:user,:kind,:entry,:sense,:source,1,:version,:now)"
+                            "VALUES(:fid,:user,:content_type,:content_id,:kind,:entry,:sense,"
+                            ":source,1,:version,:now)"
                         ),
                         identity | {"fid": favorite_id, "version": version, "now": dbtime(now)},
                     )
@@ -355,24 +363,35 @@ class SQLAlchemySnapshotRepository:
             return [self._model(row) for row in rows]
 
     async def states(
-        self, user_id: str, identities: list[tuple[str, str, str, str]]
-    ) -> dict[tuple[str, str, str, str], str]:
+        self, user_id: str, identities: list[SnapshotIdentity]
+    ) -> dict[SnapshotIdentity, str]:
         if not identities:
             return {}
         params: dict[str, Any] = {"user": user_id}
         clauses = []
-        for i, (kind, entry, sense, source) in enumerate(identities):
+        for i, (content_type, content_id, kind, entry, sense, source) in enumerate(identities):
             clauses.append(
-                f"(f.entry_type=:k{i} AND f.entry_id=:e{i} "
+                f"(f.content_type=:ct{i} AND f.content_id=:ci{i} "
+                f"AND f.entry_type=:k{i} AND f.entry_id=:e{i} "
                 f"AND f.sense_id=:s{i} AND f.source_id=:o{i})"
             )
-            params.update({f"k{i}": kind, f"e{i}": entry, f"s{i}": sense, f"o{i}": source})
+            params.update(
+                {
+                    f"ct{i}": content_type,
+                    f"ci{i}": content_id,
+                    f"k{i}": kind,
+                    f"e{i}": entry,
+                    f"s{i}": sense,
+                    f"o{i}": source,
+                }
+            )
         async with self.sessions() as session:
             rows = (
                 (
                     await session.execute(
                         text(
-                            "SELECT f.entry_type,f.entry_id,f.sense_id,f.source_id,f.public_id "
+                            "SELECT f.content_type,f.content_id,"
+                            "f.entry_type,f.entry_id,f.sense_id,f.source_id,f.public_id "
                             "FROM favorite_snapshot f JOIN user_account u ON u.id=f.user_id "
                             "WHERE u.public_id=:user AND u.status='ACTIVE' AND f.active=1 AND ("
                             + " OR ".join(clauses)
@@ -386,6 +405,8 @@ class SQLAlchemySnapshotRepository:
             )
         return {
             (
+                str(row["content_type"]),
+                str(row["content_id"]),
                 str(row["entry_type"]),
                 str(row["entry_id"]),
                 str(row["sense_id"]),
@@ -590,8 +611,8 @@ class SQLAlchemySnapshotRepository:
         target = row["pronunciation_target_id"]
         data = ConfirmedSnapshot(
             reference=SnapshotReference(
-                content_type=row["content_type"],
-                content_id=row["content_id"],
+                content_type=row["saved_content_type"],
+                content_id=row["saved_content_id"],
                 content_version=row["saved_content_version"],
                 entry_type={"VOCABULARY": "word", "PHRASE": "chunk"}.get(
                     row["entry_type"], row["entry_type"]

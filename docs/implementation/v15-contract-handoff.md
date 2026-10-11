@@ -58,3 +58,9 @@
 | `D:/个人/juya/juya-miniapp-api/docs/contracts/miniapp-api.d.ts` | `0c2824feec6b89e6f3470572dcb16cb30bebcdcf860e86430e082eff3da255fc` |
 
 本轮提交及统一门禁结果见v15-progress.md。本仓新契约必须取代前端a9a97b8固定fixture；根生成器以本轮最终提交`--ref HEAD`同步同一路径。最终页面、设备/云端/人工/生产仍由对应验收处理。
+
+## 页面联调收藏身份修复（schema0019）
+
+本仓后续修复跨内容收藏身份串用：稳定身份及详情有效状态补齐content_type/content_id，版本不进入身份。需要先应用管理端0019迁移；运行ready最低schema现为0019。既有收藏ID及不可变保存事实保留，公开请求/响应结构无变化，上表第三轮JSON/TS blob哈希仍有效，无需刷新固定fixture。最新定向单元57项、真实SQL/Socket2项及管理权威/HMAC链1项通过；详见v15-content-namespace-followup.md。最终四项目浏览器复验由协调对话执行。
+
+补齐两scope并发保存/取消/重收回归后，新私有环境单次4项SQL/Socket/HMAC全部通过，9.34s；定向单元57项和静态门禁再次通过。详细测试路径及保存版本语义见跟进文档。
