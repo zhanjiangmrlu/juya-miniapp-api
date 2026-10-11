@@ -93,7 +93,12 @@ def create_checkins_router(
             accessible = set(all_scene_ids)
             open_ids: set[str] = set()
             if catalog is not None and all_scene_ids:
-                projections = await catalog.access(user_id, all_scene_ids)
+                projections = []
+                # Admin's AccessBatchRequest permits at most 100 scene identities.
+                for offset in range(0, len(all_scene_ids), 100):
+                    projections.extend(
+                        await catalog.access(user_id, all_scene_ids[offset : offset + 100])
+                    )
                 accessible = {
                     item.scene_id
                     for item in projections

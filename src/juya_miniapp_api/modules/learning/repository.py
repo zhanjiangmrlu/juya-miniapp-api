@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import hashlib
 import json
 from datetime import UTC, datetime
 from typing import Protocol
@@ -460,13 +462,66 @@ class SQLAlchemyLearningRepository:
         async with self._session_factory() as session:
             return await self._load_progress(session, user_id, scene_id)
 
-    async def list_history(self, user_id: str, limit: int = 100) -> list[LearningProgress]:
+    async def history_page(
+        self, user_id: str, cursor: str | None, limit: int
+    ) -> tuple[list[LearningProgress], str | None, bool]:
+        if not 1 <= limit <= 100:
+            raise AppError("PAGE_LIMIT_INVALID", "分页数量不正确", 422)
+        scope = hashlib.sha256(json.dumps(["scene_history", user_id, 1]).encode()).hexdigest()
+        after = None
+        if cursor is not None:
+            try:
+                saved = json.loads(base64.urlsafe_b64decode(cursor))
+                stamp = datetime.fromisoformat(saved["time"])
+                identity = saved["id"]
+                if (
+                    saved["scope"] != scope
+                    or stamp.tzinfo is None
+                    or not isinstance(identity, str)
+                    or not 1 <= len(identity) <= 64
+                ):
+                    raise ValueError("History cursor scope or position is invalid")
+                after = stamp, identity
+            except (ValueError, KeyError, TypeError) as error:
+                raise AppError("CURSOR_INVALID", "分页位置已失效,请刷新", 422) from error
+        rows = await self.list_history(user_id, limit + 1, after=after)
+        has_more = len(rows) > limit
+        visible = rows[:limit]
+        next_cursor = None
+        if has_more:
+            last = visible[-1]
+            next_cursor = base64.urlsafe_b64encode(
+                json.dumps(
+                    {"scope": scope, "time": last.last_learned_at.isoformat(), "id": last.scene_id}
+                ).encode()
+            ).decode()
+        return visible, next_cursor, has_more
+
+    async def list_history(
+        self,
+        user_id: str,
+        limit: int | None = None,
+        *,
+        after: tuple[datetime, str] | None = None,
+    ) -> list[LearningProgress]:
         # 功能:按最近学习时间查询用户场景进度历史
         # 参数:
         #     self: 当前SQL场景学习进度仓库实例
         #     user_id: 当前操作所属用户的公开标识
         #     limit: 本次查询或任务领取允许的最大记录数量
-        # 返回:场景阅读位置、请求序号与学习时间集合
+        # 返回:场景阅读位置、请求序号与学习时间集合;内部消费者默认读取全部候选
+        params: dict[str, object] = {"public_id": user_id}
+        predicate = ""
+        if after is not None:
+            predicate = (
+                " AND (p.last_learned_at<:after_time OR "
+                "(p.last_learned_at=:after_time AND p.scene_id<:after_id))"
+            )
+            params.update(after_time=_database_datetime(after[0]), after_id=after[1])
+        limit_clause = ""
+        if limit is not None:
+            params["limit"] = limit
+            limit_clause = " LIMIT :limit"
         async with self._session_factory() as session:
             rows = (
                 (
@@ -476,10 +531,12 @@ class SQLAlchemyLearningRepository:
                             "p.last_client_sequence, p.started_at, p.completed_at, "
                             "p.last_learned_at FROM learning_progress p "
                             "JOIN user_account u ON u.id = p.user_id "
-                            "WHERE u.public_id = :public_id "
-                            "ORDER BY p.last_learned_at DESC LIMIT :limit"
+                            "WHERE u.public_id = :public_id"
+                            + predicate
+                            + " ORDER BY p.last_learned_at DESC,p.scene_id DESC"
+                            + limit_clause
                         ),
-                        {"public_id": user_id, "limit": limit},
+                        params,
                     )
                 )
                 .mappings()

@@ -2,7 +2,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from juya_miniapp_api.infrastructure.observability.metrics import PROGRESS_FAILURES
@@ -18,6 +18,30 @@ class PositionRequest(BaseModel):
     client_sequence: int = Field(ge=0)
     entry_id: str = Field(min_length=1, max_length=64)
     offset: int = Field(default=0, ge=0)
+
+
+class SceneHistoryPositionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    entry_id: str
+    offset: int
+
+
+class SceneHistoryItemResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scene_id: str
+    source_type: str
+    position: SceneHistoryPositionResponse
+    client_sequence: int
+    started_at: datetime
+    completed_at: datetime | None
+    last_learned_at: datetime
+
+
+class SceneHistoryPageResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[SceneHistoryItemResponse]
+    has_more: bool
+    next_cursor: str | None
 
 
 def _progress(value: LearningProgress) -> dict[str, object]:
@@ -126,15 +150,23 @@ def create_learning_router(
             payload.update(await achievement_reader(user_id))
         return payload
 
-    @router.get("/history/scenes")
+    @router.get("/history/scenes", response_model=SceneHistoryPageResponse)
     async def history(
+        response: Response,
         user_id: Annotated[str, Depends(user_dependency)],
+        cursor: Annotated[str | None, Query(max_length=2048)] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 100,
     ) -> dict[str, object]:
         # 功能:列出当前用户场景学习历史
         # 参数:
         #     user_id: 当前操作所属用户的公开标识
         # 返回:场景学习历史列表与分页标记
-        items = await repository.list_history(user_id)
-        return {"items": [_progress(item) for item in items], "has_more": False}
+        response.headers["Cache-Control"] = "private, no-store"
+        items, next_cursor, has_more = await repository.history_page(user_id, cursor, limit)
+        return {
+            "items": [_progress(item) for item in items],
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+        }
 
     return router
