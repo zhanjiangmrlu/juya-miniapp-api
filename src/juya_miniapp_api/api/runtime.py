@@ -310,7 +310,6 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
             learning=learning_repository,
             catalog=catalog_service,
             messages=message_service,
-            favorites=favorite_repository,
             snapshots=snapshots,
         ),
         create_content_access_router(catalog_service, access_service, user_dependency=current_user),

@@ -10,7 +10,6 @@ from juya_miniapp_api.modules.checkins.service import (
     beijing_learning_date,
     summarize_checkins,
 )
-from juya_miniapp_api.modules.favorites.repository import SQLAlchemyFavoriteRepository
 from juya_miniapp_api.modules.favorites.snapshots import SnapshotService
 from juya_miniapp_api.modules.learning.catalog_service import CatalogService
 from juya_miniapp_api.modules.learning.domain import TodayTask
@@ -31,7 +30,6 @@ def create_checkins_router(
     learning: SQLAlchemyLearningRepository | None = None,
     catalog: CatalogService | None = None,
     messages: MessageService | None = None,
-    favorites: SQLAlchemyFavoriteRepository | None = None,
     snapshots: SnapshotService | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> APIRouter:
@@ -42,7 +40,7 @@ def create_checkins_router(
     #     learning: 读取场景进度与学习历史的SQL仓库
     #     catalog: 读取学习目录和场景权限的业务服务
     #     messages: 查询站内消息与未读数量的业务服务
-    #     favorites: 读取收藏和复习队列的SQL仓库
+    #     snapshots: 读取本人有效独立收藏快照及复习队列的服务
     #     clock: 提供当前时间的可替换时钟回调
     # 返回:包含业务端点的FastAPI路由器
     router = APIRouter(prefix="/api/v1", tags=["checkins"])
@@ -138,16 +136,6 @@ def create_checkins_router(
                     if not page.has_more:
                         break
                     snapshot_cursor = page.next_cursor
-            elif favorites is not None:
-                cursor = None
-                while True:
-                    batch = await favorites.list_favorites(user_id, after_id=cursor, limit=100)
-                    review_cards.extend(
-                        TodayTask("FAVORITE_CARD", item.public_id) for item in batch
-                    )
-                    if len(batch) < 100:
-                        break
-                    cursor = batch[-1].public_id
             today_task = select_today_task(unfinished, new_scenes, review_cards, completed)
         task_payload = None
         if today_task is not None:
@@ -155,11 +143,7 @@ def create_checkins_router(
                 "kind": today_task.kind,
                 "target_id": today_task.target_id,
                 "card_ids": list(today_task.card_ids),
-                "review_queue_url": (
-                    "/api/v1/reviews/queue?snapshot_schema=2"
-                    if snapshots
-                    else "/api/v1/reviews/queue"
-                )
+                "review_queue_url": "/api/v1/reviews/queue?snapshot_schema=2"
                 if today_task.kind == "FAVORITE_REVIEW"
                 else None,
             }
