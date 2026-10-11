@@ -23,7 +23,7 @@ Ruling: 仅静态前端无调用或单次浏览器零请求不能证明旧公开
 | GET `/api/v1/reviews/queue`的snapshot_schema=1分支 | 旧路径兼容旧ID；schema2由SnapshotService分页。新版前端创建reviews时显式snapshot_schema=2 | 新队列/银行均读取完整快照；旧请求通过review_ids映射，缺失映射409、多义歧义409；完成端点还识别历史review_session | 保留历史会话完成和ID映射。不能只因当前前端不创建旧会话就删除旧完成逻辑 |
 | GET `/api/v1/scenes/{scene_id}/entries/{entry_id}` | access_router.py→AccessService.get_entry→AdminApiClient.get_entry。前端scene-service.ts仍声明请求；use-scene-page.ts inspectEntry仍调用并导出，position-page-view.vue来源模式也有直接调用点 | schema2 POST scene/open一次返回SceneDetail.words/chunks及批量真实状态；新版收藏只提交引用。该旧GET是固定发布修订/条目/定位的权威读取，未发现自由输入词典或AI翻译服务 | **公开移除候选，待协调**。先清理前端inspectEntry/旧定位来源调用，确认schema1旧内容仍能直接展示/发音及返回当前原文；然后同步删除路由、client/protocol/service、DTO必要依赖及双方快照。此轮不自行改公开契约 |
 | PATCH `/api/v1/me/profile` | users/router.py两个装饰器绑定同一个update_profile函数及UserService.update_profile；当前profile-service.ts使用POST；Mock与既有公开契约测试仍支持PATCH | 正式POST已有相同校验、存储、头像签名及no-store。不存在第二套数据/保存逻辑 | **公开别名移除候选，待协调**。当前应用可用POST，但删除PATCH改变公开契约并影响旧调用方；本次保留别名及共用实现 |
-| GET `/api/v1/learning/open-history` | access_router.py→AccessService.open_history→SQLAlchemyOpenHistory.list_opened；当前前端未找到业务HTTP调用 | GET `/api/v1/history/scenes`是正式分页学习历史和当前can_open投影；旧接口形状/分页和访问事实不同 | **次级公开移除候选，待协调**。不能仅删除SQLAlchemyOpenHistory，scene/open仍调用record_open保存真实打开历史 |
+| GET `/api/v1/learning/open-history` | access_router.py→AccessService.open_history→SQLAlchemyOpenHistory.list_opened；当前前端未找到业务HTTP调用 | GET `/api/v1/history/scenes`是正式分页学习历史，返回进度/时间，不自带can_open；当前可打开状态仍需独立access投影。旧接口形状/分页和访问事实不同 | **次级公开移除候选，待协调**。不能仅删除SQLAlchemyOpenHistory，scene/open仍调用record_open保存真实打开历史 |
 | POST `/api/v1/media/{target_id}/signed-url` | 当前scene-service.ts getSignedUrl仍存在缺scene/revision时的fallback；AccessService和AdminApiClient仍有调用链 | 新场景资源GET签名与受控pronunciations按固定版本/授权身份处理；旧媒体读取也是权限委托，不是独立TTS或词典 | 保留直到消费者fallback及旧资源路径完成替换；签名/授权语义不能直接拿一个不同参数接口替换 |
 | 旧短文句子讲解、逐词翻译/查词、短文新收藏 | short_reading/router.py仅列表、preview、open、progress、complete、history、全文resource；ReadingDetail/Preview为strict DTO，无words/chunks/explanation字段；SnapshotReference不接受short_reading | 独立纯阅读已经使用完整英文自然段、全文中文、可选全文音频及独立进度；SceneContent只接受dialogue/word_card/vocabulary | 已停止提供这类新短文能力；本仓没有发现可以删除的独立旧讲解/翻译端点。保留历史收藏资料及来源鉴权，未删数据 |
 | 自由词典/整篇自动翻译服务 | 本仓当前src及正式OpenAPI未发现dictionary/translate/lookup公开路径；field_lookup_key是个人字段不可逆检索密钥，不是查词功能 | 当前词语学习取已确认资料；发音首次TTS仍是独立音频准备，不是释义生成 | 无此类运行实现可删除；不能误删隐私检索或发音模块 |
@@ -57,6 +57,8 @@ uv run pytest tests/unit/favorites tests/unit/learning/test_v15_detail.py tests/
 覆盖旧来源/复习授权、当前快照身份、同版详情批量状态、POST/PATCH共用资料校验、纯阅读strict字段和正式路由/OpenAPI快照。warning为既有Starlette/httpx弃用提示。仅单元/内存HTTP/契约检查，未启动数据库或重跑SQL/千篇/构建。
 
 清理首页旧分支之后，扩大必要范围到`tests/unit/checkins/test_v15_home_priority.py`及`tests/unit/learning/test_v15_history_pagination.py`，连同上面测试一起执行：97 passed，1 warning，2.90s。首页权益优先级、收藏优先复习、101场景历史分批与分页、旧收藏/新快照/纯阅读/资料契约均通过；正式OpenAPI与冻结JSON快照一致。Ruff检查通过、229文件格式检查通过、mypy检查131源文件无错误，git diff --check通过。未重新跑数据库/SQL或发布环境验收。
+
+最终只读评审未发现源码确证P1/P2；已纠正历史接口差异措辞：分页场景历史无can_open字段，不把独立访问投影写作该接口现有能力。文中“银行”为需求§8定义的词汇银行/语块银行，不是中央词库。
 
 ## 交付结论
 
