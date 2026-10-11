@@ -123,9 +123,7 @@ class FavoriteService:
                 item.sentence_snapshot,
                 item.source_locator,
                 (
-                    f"/scenes/{item.scene_id}"
-                    + (f"?revision_id={quote(item.revision_id)}" if item.revision_id else "")
-                    + f"#{quote(item.source_locator)}"
+                    f"/scenes/{quote(item.scene_id, safe='')}"
                     if item.scene_id in accessible_scene_ids
                     else None
                 ),

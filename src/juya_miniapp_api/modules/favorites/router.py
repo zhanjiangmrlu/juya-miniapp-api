@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -8,8 +8,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from juya_miniapp_api.modules.favorites.domain import FavoriteEntry
 from juya_miniapp_api.modules.favorites.repository import SQLAlchemyFavoriteRepository
 from juya_miniapp_api.modules.favorites.service import FavoriteService
+from juya_miniapp_api.modules.favorites.snapshot_router import public_snapshot
+from juya_miniapp_api.modules.favorites.snapshots import EntryType, SnapshotService
+from juya_miniapp_api.modules.favorites.snapshots_sql import SQLAlchemySnapshotRepository
 from juya_miniapp_api.modules.learning.catalog_service import CatalogService
 from juya_miniapp_api.modules.users.router import UserDependency
+from juya_miniapp_api.shared.errors import AppError
 
 
 class FavoriteRequest(BaseModel):
@@ -27,6 +31,7 @@ class FavoriteRequest(BaseModel):
 class ReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     card_ids: list[str]
+    snapshot_schema: Literal[1, 2] = 1
 
 
 def _favorite(value: FavoriteEntry) -> dict[str, object]:
@@ -67,6 +72,8 @@ def create_favorites_router(
     user_dependency: UserDependency,
     catalog: CatalogService | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    snapshots: SnapshotService | None = None,
+    snapshot_repository: SQLAlchemySnapshotRepository | None = None,
 ) -> APIRouter:
     # 功能:创建并绑定收藏复习路由与业务依赖
     # 参数:
@@ -103,6 +110,8 @@ def create_favorites_router(
         user_id: Annotated[str, Depends(user_dependency)],
         cursor: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
+        snapshot_schema: Literal[1, 2] = 1,
+        entry_type: EntryType | None = None,
     ) -> dict[str, object]:
         # 功能:返回当前用户收藏复习候选队列
         # 参数:
@@ -110,6 +119,15 @@ def create_favorites_router(
         #     cursor: 分页游标;空值从第一页开始
         #     limit: 本次查询或任务领取允许的最大记录数量
         # 返回:可复习收藏列表、下一页游标与是否还有后续页
+        if snapshot_schema == 2:
+            if snapshots is None:
+                raise AppError("ADMIN_API_UNAVAILABLE", "收藏服务暂时不可用", 503)
+            page = await snapshots.page(user_id, entry_type, cursor, limit)
+            return {
+                "items": [public_snapshot(row) for row in page.items],
+                "next_cursor": page.next_cursor,
+                "has_more": page.has_more,
+            }
         items = await repository.list_favorites(user_id, after_id=cursor, limit=limit + 1)
         visible = items[:limit]
         return {
@@ -194,6 +212,14 @@ def create_favorites_router(
         #     user_id: 当前操作所属用户的公开标识
         #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
         # 返回:复习会话标识、类型、开始时间、卡片数量与固定卡片标识
+        if payload.snapshot_schema == 2:
+            if snapshot_repository is None:
+                raise AppError("ADMIN_API_UNAVAILABLE", "收藏服务暂时不可用", 503)
+            return (
+                await snapshot_repository.create_review(
+                    user_id, payload.card_ids, idempotency_key, clock()
+                )
+            ).model_dump()
         review = await service.create_review(user_id, payload.card_ids, idempotency_key, clock())
         return {
             "id": review.id,
@@ -214,6 +240,12 @@ def create_favorites_router(
         #     user_id: 当前操作所属用户的公开标识
         #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
         # 返回:复习会话标识、首次完成标记与北京时间打卡日期
+        if snapshot_repository is not None and await snapshot_repository.is_snapshot_review(
+            user_id, review_id
+        ):
+            return await snapshot_repository.complete_review(
+                user_id, review_id, idempotency_key, clock()
+            )
         result = await service.complete_review(user_id, review_id, idempotency_key, clock())
         return {
             "id": result.session.id,

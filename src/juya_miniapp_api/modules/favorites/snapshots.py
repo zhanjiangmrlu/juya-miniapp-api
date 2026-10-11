@@ -24,12 +24,14 @@ class SnapshotReference(StrictModel):
     content_type: Literal["dialogue", "word_card"]
     content_id: str = Field(min_length=1, max_length=64)
     content_version: int = Field(ge=1)
-    entry_type: EntryType
+    entry_type: EntryType | None = None
     entry_id: str = Field(min_length=1, max_length=64)
     sense_id: str = Field(min_length=1, max_length=64)
     source_id: str = Field(min_length=1, max_length=64)
 
     def identity(self) -> tuple[str, str, str, str]:
+        if self.entry_type is None:
+            raise ValueError("Entry type must come from a confirmed entry")
         return self.entry_type, self.entry_id, self.sense_id, self.source_id
 
 
@@ -54,6 +56,8 @@ class ConfirmedSnapshot(StrictModel):
 
     @model_validator(mode="after")
     def chunk_has_no_image(self) -> "ConfirmedSnapshot":
+        if self.reference.entry_type is None:
+            raise ValueError("Confirmed snapshot requires an authoritative entry type")
         if self.reference.entry_type == "chunk" and self.image_asset_id is not None:
             raise ValueError("Chunk snapshots cannot carry display images")
         return self
@@ -63,6 +67,7 @@ class FavoriteSnapshot(StrictModel):
     favorite_id: str
     active: bool
     snapshot_version: int = Field(ge=1)
+    snapshot_revision_id: str | None = None
     saved_content_version: int = Field(ge=1)
     favorited_at: datetime
     last_reviewed_at: datetime | None = None
@@ -74,6 +79,16 @@ class SnapshotPage(StrictModel):
     items: list[FavoriteSnapshot]
     next_cursor: str | None
     has_more: bool
+
+
+class SnapshotReview(StrictModel):
+    id: str
+    snapshot_schema: Literal[2] = 2
+    card_ids: list[str]
+    snapshot_versions: list[int]
+    card_count: int
+    started_at: datetime
+    completed_at: datetime | None = None
 
 
 class SnapshotAuthority(Protocol):
@@ -148,8 +163,11 @@ class InMemorySnapshotRepository:
             if replay:
                 return replay
             data = await confirm()
-            if data.reference != ref:
+            if data.reference != ref.model_copy(
+                update={"entry_type": ref.entry_type or data.reference.entry_type}
+            ):
                 raise AppError("CONTENT_VERSION_CONFLICT", "内容已更新,请刷新后收藏", 409)
+            ref = data.reference
             identity = user_id, ref.identity()
             current = self.rows.get(identity)
             if current is None or not current.active:

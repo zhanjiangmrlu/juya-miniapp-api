@@ -33,4 +33,4 @@ async def test_same_word_retains_each_published_source_and_optional_pronunciatio
     assert {source.revision_id for source in result.sources} == {"rev-1", "rev-2"}
     detail = await service.detail("user", result.public_id, accessible_scene_ids={"scene"})
     assert detail.sources[0].entry_snapshot["audio_version_id"] is None
-    assert "revision_id=rev-1" in detail.sources[0].original_link
+    assert detail.sources[0].original_link == "/scenes/scene"

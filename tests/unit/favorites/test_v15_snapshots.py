@@ -35,7 +35,7 @@ class Authority:
         if self.denied:
             raise AppError("CONTENT_ACCESS_DENIED", "无权", 403)
         return ConfirmedSnapshot(
-            reference=ref,
+            reference=ref.model_copy(update={"entry_type": ref.entry_type or "word"}),
             revision_id="revision-" + str(ref.content_version),
             english="medium",
             meaning_zh="中杯" if ref.sense_id == "cup" else "中等的",
@@ -80,9 +80,7 @@ async def test_repeat_active_preserves_snapshot_cancel_and_recollect_uses_new_re
 
 
 @pytest.mark.asyncio
-async def test_success_replays_before_authorization_and_detects_payload_change() -> (
-    None
-):
+async def test_success_replays_before_authorization_and_detects_payload_change() -> None:
     authority = Authority()
     service = SnapshotService(InMemorySnapshotRepository(), authority)
     first = await service.create("user", reference(), "key", NOW)
@@ -139,3 +137,15 @@ def test_reference_rejects_client_supplied_definition_and_chunk_image() -> None:
             source_locator={},
             image_asset_id="image",
         )
+
+
+@pytest.mark.asyncio
+async def test_public_reference_infers_type_from_authoritative_entry() -> None:
+    ref = SnapshotReference.model_validate(reference().model_dump(exclude={"entry_type"}))
+    repo = InMemorySnapshotRepository()
+    authority = Authority()
+    service = SnapshotService(repo, authority)
+    result = await service.create("user", ref, "infer", NOW)
+    assert result.data.reference.entry_type == "word"
+    authority.denied = True
+    assert await service.create("user", ref, "infer", NOW) == result

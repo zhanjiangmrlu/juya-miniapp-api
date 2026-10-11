@@ -13,6 +13,10 @@ from juya_miniapp_api.modules.accounts.domain import (
     DeletionStatus,
     OutboxEvent,
 )
+from juya_miniapp_api.modules.favorites.snapshots_sql import (
+    SELECT_SNAPSHOT,
+    SQLAlchemySnapshotRepository,
+)
 from juya_miniapp_api.shared.errors import AppError
 from juya_miniapp_api.shared.ids import new_ulid
 
@@ -640,7 +644,34 @@ class SQLAlchemyAccountRepository:
         #     session: 异步数据库会话
         #     user_id: 业务数据库中的用户内部数值主键
         # 返回:无返回值。
+        # The caller holds the account lock, as do all snapshot mutations. Publish
+        # ordered release events in the same transaction before cascading deletion.
+        rows = (
+            (
+                await session.execute(
+                    text(SELECT_SNAPSHOT + " WHERE f.user_id=:user AND f.active=1 FOR UPDATE"),
+                    {"user": user_id},
+                )
+            )
+            .mappings()
+            .all()
+        )
+        now = datetime.now(UTC)
+        for row in rows:
+            snapshot = SQLAlchemySnapshotRepository._model(row)
+            await SQLAlchemySnapshotRepository._reference(
+                session,
+                snapshot.model_copy(update={"active": False}),
+                str(row["current_snapshot_revision_id"]),
+                now,
+            )
+        await session.execute(
+            text("DELETE FROM user_command_dedup WHERE user_id=:user AND endpoint LIKE 'v15:%'"),
+            {"user": user_id},
+        )
         for table_name in (
+            "short_reading_progress",
+            "favorite_snapshot",
             "review_session",
             "favorite_entry",
             "daily_checkin",

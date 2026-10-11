@@ -63,7 +63,7 @@ async def test_same_normalized_entry_merges_sources_and_keeps_snapshots() -> Non
     assert all(item.original_link is None for item in restricted.sources)
     accessible = await service.detail(USER_ID, merged.public_id, accessible_scene_ids={"scene-2"})
     assert accessible.sources[0].original_link is None
-    assert accessible.sources[1].original_link == "/scenes/scene-2#sentence-2"
+    assert accessible.sources[1].original_link == "/scenes/scene-2"
 
 
 @pytest.mark.asyncio
