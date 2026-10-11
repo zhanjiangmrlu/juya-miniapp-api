@@ -3,6 +3,7 @@ from typing import Protocol
 
 from juya_miniapp_api.modules.favorites.snapshots import SnapshotService
 from juya_miniapp_api.modules.short_reading.domain import (
+    ReadingCompletion,
     ReadingDetail,
     ReadingPosition,
     ReadingProgress,
@@ -22,48 +23,60 @@ class ShortReadingService:
 
     async def open(self, user_id: str, content_id: str, now: datetime) -> ReadingDetail:
         detail = await self._authorized(user_id, content_id)
-        old = await self.repository.get(user_id, content_id)
-        position = ReadingPosition(content_version=detail.content_version)
-        if old and old.saved_content_version == detail.content_version:
-            candidate = ReadingPosition(
-                content_version=detail.content_version,
-                paragraph_id=old.paragraph_id,
-                offset=old.offset,
-            )
-            try:
-                self._position(detail, candidate)
-                position = candidate
-            except AppError:
-                pass
-        progress = await self.repository.save(user_id, content_id, position, now)
+        progress = await self.repository.open(
+            user_id,
+            content_id,
+            detail.content_version,
+            self._paragraphs(detail),
+            now,
+        )
         return detail.model_copy(update={"progress": progress})
 
     async def save(
-        self, user_id: str, content_id: str, position: ReadingPosition, now: datetime
+        self,
+        user_id: str,
+        content_id: str,
+        position: ReadingPosition,
+        now: datetime,
     ) -> ReadingProgress:
         detail = await self._authorized(user_id, content_id)
         self._position(detail, position)
+        if position.client_sequence < 1:
+            raise AppError("READING_SEQUENCE_INVALID", "阅读进度需要有效客户端序号", 422)
         return await self.repository.save(user_id, content_id, position, now)
 
     async def complete(
-        self, user_id: str, content_id: str, key: str, version: int, now: datetime
-    ) -> ReadingProgress:
+        self,
+        user_id: str,
+        content_id: str,
+        key: str,
+        version: int,
+        now: datetime,
+    ) -> ReadingCompletion:
         SnapshotService._key(key)
+        replay = await self.repository.replay_completion(user_id, content_id, key, version)
+        if replay:
+            return replay
         detail = await self._authorized(user_id, content_id)
-        position = ReadingPosition(content_version=version)
-        self._position(detail, position)
-        old = await self.repository.get(user_id, content_id)
-        if old and old.saved_content_version == version:
-            position = ReadingPosition(
-                content_version=version, paragraph_id=old.paragraph_id, offset=old.offset
-            )
-        return await self.repository.save(user_id, content_id, position, now, complete=True)
+        self._position(detail, ReadingPosition(content_version=version))
+        return await self.repository.complete(
+            user_id,
+            content_id,
+            key,
+            version,
+            self._paragraphs(detail),
+            now,
+        )
 
     async def _authorized(self, user_id: str, content_id: str) -> ReadingDetail:
         detail = await self.authority.open_reading(user_id, content_id)
         if detail.content_id != content_id:
             raise AppError("CONTENT_CONTRACT_INVALID", "内容服务返回不一致", 503)
         return detail
+
+    @staticmethod
+    def _paragraphs(detail: ReadingDetail) -> dict[str, int]:
+        return {row.paragraph_id: len(row.english) for row in detail.paragraphs_en}
 
     @staticmethod
     def _position(detail: ReadingDetail, position: ReadingPosition) -> None:

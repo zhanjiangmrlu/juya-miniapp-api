@@ -59,6 +59,7 @@ async def test_open_save_complete_are_independent_and_preserve_completion_across
             content_version=1,
             paragraph_id="p1",
             offset=3,
+            client_sequence=1,
         ),
         NOW,
     )
@@ -137,3 +138,141 @@ def test_pure_reading_and_safe_preview_reject_content_leaks() -> None:
     ]:
         with pytest.raises(ValidationError):
             ReadingPreview.model_validate(preview | extra)
+
+
+@pytest.mark.asyncio
+async def test_client_sequence_rejects_same_version_out_of_order_and_resets_new_version() -> None:
+    repo = InMemoryReadingRepository()
+    authority = Authority()
+    service = ShortReadingService(authority, repo)
+    newest = await service.save(
+        "user",
+        "reading",
+        ReadingPosition(content_version=1, paragraph_id="p1", offset=5, client_sequence=9),
+        NOW,
+    )
+    for sequence in (8, 9):
+        stale = await service.save(
+            "user",
+            "reading",
+            ReadingPosition(
+                content_version=1, paragraph_id="p1", offset=1, client_sequence=sequence
+            ),
+            NOW,
+        )
+        assert stale.offset == newest.offset == 5
+        assert stale.client_sequence == 9
+    authority.version = 2
+    reset = await service.open("user", "reading", NOW)
+    assert reset.progress.client_sequence == 0
+    saved = await service.save(
+        "user",
+        "reading",
+        ReadingPosition(content_version=2, paragraph_id="p1", offset=2, client_sequence=1),
+        NOW,
+    )
+    assert saved.client_sequence == 1 and saved.offset == 2
+
+
+@pytest.mark.asyncio
+async def test_open_queued_behind_save_keeps_latest_position_in_lock() -> None:
+    import asyncio
+
+    repo = InMemoryReadingRepository()
+    service = ShortReadingService(Authority(), repo)
+    await service.save(
+        "user",
+        "reading",
+        ReadingPosition(content_version=1, paragraph_id="p1", offset=1, client_sequence=1),
+        NOW,
+    )
+    await repo._lock.acquire()
+    saved = asyncio.create_task(
+        service.save(
+            "user",
+            "reading",
+            ReadingPosition(content_version=1, paragraph_id="p1", offset=5, client_sequence=2),
+            NOW,
+        )
+    )
+    await asyncio.sleep(0)
+    opened = asyncio.create_task(service.open("user", "reading", NOW))
+    await asyncio.sleep(0)
+    repo._lock.release()
+    await saved
+    result = await opened
+    assert result.progress.offset == 5
+    assert result.progress.client_sequence == 2
+
+
+@pytest.mark.asyncio
+async def test_completion_queued_behind_save_keeps_latest_position_in_lock() -> None:
+    import asyncio
+
+    repo = InMemoryReadingRepository()
+    service = ShortReadingService(Authority(), repo)
+    await service.save(
+        "user",
+        "reading",
+        ReadingPosition(content_version=1, paragraph_id="p1", offset=1, client_sequence=1),
+        NOW,
+    )
+    await repo._lock.acquire()
+    saved = asyncio.create_task(
+        service.save(
+            "user",
+            "reading",
+            ReadingPosition(content_version=1, paragraph_id="p1", offset=5, client_sequence=2),
+            NOW,
+        )
+    )
+    await asyncio.sleep(0)
+    completed = asyncio.create_task(service.complete("user", "reading", "complete", 1, NOW))
+    await asyncio.sleep(0)
+    repo._lock.release()
+    await saved
+    result = await completed
+    assert result.offset == 5
+    assert result.client_sequence == 2
+    assert result.created is True
+
+
+@pytest.mark.asyncio
+async def test_complete_keys_bind_user_content_and_version_replay_before_current_access() -> None:
+    repo = InMemoryReadingRepository()
+    authority = Authority()
+    service = ShortReadingService(authority, repo)
+    first = await service.complete("user", "reading", "same", 1, NOW)
+    assert first.created
+    again = await service.complete("user", "reading", "new", 1, NOW)
+    assert not again.created
+    authority.version = 2
+    with pytest.raises(AppError) as conflict:
+        await service.complete("user", "reading", "same", 2, NOW)
+    assert conflict.value.code == "IDEMPOTENCY_CONFLICT"
+    authority.denied = True
+    assert await service.complete("user", "reading", "same", 1, NOW) == first
+    authority.denied = False
+    authority.version = 1
+    assert (await service.complete("other-user", "reading", "same", 1, NOW)).created
+    assert len(repo.completion_events) == 2
+
+
+@pytest.mark.asyncio
+async def test_invalid_saved_anchor_is_reset_in_open_and_complete_without_erasing_completion() -> (
+    None
+):
+    repo = InMemoryReadingRepository()
+    service = ShortReadingService(Authority(), repo)
+    # Stored progress may reference a removed anchor even with a legacy saved version.
+    await repo.save(
+        "user",
+        "reading",
+        ReadingPosition(content_version=1, paragraph_id="gone", offset=4, client_sequence=1),
+        NOW,
+    )
+    completed = await service.complete("user", "reading", "done", 1, NOW)
+    assert completed.paragraph_id is None and completed.offset == 0
+    opened = await service.open("user", "reading", NOW)
+    assert opened.progress.completed_at == NOW
+    assert opened.progress.paragraph_id is None

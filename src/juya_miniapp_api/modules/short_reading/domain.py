@@ -34,6 +34,7 @@ class ReadingPosition(StrictModel):
     content_version: int = Field(ge=1)
     paragraph_id: str | None = Field(default=None, min_length=1, max_length=64)
     offset: int = Field(default=0, ge=0, le=10000)
+    client_sequence: int = Field(default=0, ge=0, le=9223372036854775807)
 
 
 class ReadingProgress(StrictModel):
@@ -41,12 +42,18 @@ class ReadingProgress(StrictModel):
     saved_content_version: int = Field(ge=1)
     paragraph_id: str | None = None
     offset: int = 0
+    client_sequence: int = Field(default=0, ge=0)
     started_at: datetime
     last_read_at: datetime
     completed_at: datetime | None = None
 
 
+class ReadingCompletion(ReadingProgress):
+    created: bool
+
+
 class ReadingDetail(ReadingPreview):
+    access: Literal["TRIAL", "FORMAL", "LIMITED"] = "TRIAL"
     content_version: int = Field(ge=1)
     revision_id: str
     schema_version: Literal[2] = 2
