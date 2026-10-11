@@ -172,3 +172,5 @@ Ruling: 沿用用户指定feature分支和本进度ledger，必要独立子任�
 - OpenAPI按实际配置完整运行时重新生成64 paths/73 operations，TS由openapi-typescript@7.10.1生成；最终绝对路径与SHA见v15-contract-handoff.md，必须替换a9a97b8前端固定fixture和根接口文档旧基线。
 - 独立只读评审在旧录音降级、profile配置、安全封面及历史释放修正后无新增确证P1/P2；没有跨仓库编辑、共享迁移/重启、.env修改、push或部署。
 - 本仓本轮代码缺口已闭合，可由协调消费；最终四项目真实页面、微信身份/设备、版权/人工听音、云预算/OSS CORS与Range、生产分别待对应验收，不能由这些本地门禁替代。
+
+- 最终代码/公共契约冻结：`b38294b fix(v1.5): 闭合旧录音资料入口与历史资源释放契约`。JSON和TS提交blob SHA及工作区字节一致，详见v15-contract-handoff.md；前置能力提交a9a97b8/c9e2f14/17a6552。后续仅记录此证据的文档提交不改变契约。

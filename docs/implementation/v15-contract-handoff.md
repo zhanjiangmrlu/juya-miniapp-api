@@ -44,6 +44,8 @@
 
 ## 第三轮契约（旧版录音、资料入口与安全媒体）
 
+最终代码/契约冻结提交：`b38294b`；前置能力提交`a9a97b8`、`c9e2f14`、`17a6552`。本轮完整隔离门禁378 passed/1 external skip、覆盖83.38%，静态检查全部通过。提交blob与当前JSON/TS字节已逐一核对一致，下面SHA对应正式提交；后续进度文档提交不改变这两个文件。
+
 实际配置完整运行时仍为64 paths/73 operations，新增`PublishedScene.recording_enabled: boolean`，默认false；已授权schema1外层每次读取当前实际审核配置。前端`scene-response`旧版适配须将该外层值严格透传，不能读取不可变content快照中的臆造字段。
 
 新增`LearningCatalog.profile_completion_enabled: boolean`，默认false；实际管理端现已交付同一个`learning_features_v15`中的独立严格布尔配置及HMAC读取端点。目录每次投影当前值；缺失/坏配置/读取失败/鉴权等待关闭该可选入口，同时正常授权目录继续返回。前端需同步正式类型并严格布尔消费，不使用contact_prompt_eligible替代。
