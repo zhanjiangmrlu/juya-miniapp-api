@@ -49,6 +49,8 @@ from juya_miniapp_api.modules.contacts.router import create_contacts_router
 from juya_miniapp_api.modules.contacts.service import ContactService
 from juya_miniapp_api.modules.favorites.compatibility import LegacyFavoriteAdapter
 from juya_miniapp_api.modules.favorites.repository import SQLAlchemyFavoriteRepository
+from juya_miniapp_api.modules.favorites.resource_router import create_favorite_resource_router
+from juya_miniapp_api.modules.favorites.resources import FavoriteResourceService
 from juya_miniapp_api.modules.favorites.router import create_favorites_router
 from juya_miniapp_api.modules.favorites.service import FavoriteService
 from juya_miniapp_api.modules.favorites.snapshot_router import create_snapshot_router
@@ -77,6 +79,7 @@ from juya_miniapp_api.modules.pronunciation.adapters import (
 from juya_miniapp_api.modules.pronunciation.router import create_pronunciation_router
 from juya_miniapp_api.modules.pronunciation.service import PronunciationService
 from juya_miniapp_api.modules.short_reading.authority import V15ReadingAuthority
+from juya_miniapp_api.modules.short_reading.history import SQLReadingHistory
 from juya_miniapp_api.modules.short_reading.router import create_short_reading_router
 from juya_miniapp_api.modules.short_reading.service import ShortReadingService
 from juya_miniapp_api.modules.short_reading.sql_repository import SQLAlchemyReadingRepository
@@ -315,9 +318,15 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
             compatibility=legacy_favorites,
         ),
         create_snapshot_router(snapshots, user_dependency=current_user, resolver=legacy_favorites),
+        create_favorite_resource_router(
+            FavoriteResourceService(snapshots, admin), user_dependency=current_user
+        ),
         create_pronunciation_router(pronunciation, user_dependency=current_user),
         create_short_reading_router(
-            reading_service, reading_authority, user_dependency=current_user
+            reading_service,
+            reading_authority,
+            user_dependency=current_user,
+            history=SQLReadingHistory(sessions),
         ),
         create_messages_router(message_service, user_dependency=current_user),
         create_feedback_router(
@@ -350,7 +359,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         #     无形参。
         # 返回:依赖名称到就绪状态的映射
         try:
-            checks = dict(await check_minimum_schema_version(sessions, 17))
+            checks = dict(await check_minimum_schema_version(sessions, 18))
         except Exception:
             checks = {"mysql": False, "schema": False}
         try:

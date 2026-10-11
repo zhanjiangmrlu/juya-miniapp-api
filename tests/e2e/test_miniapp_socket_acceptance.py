@@ -120,7 +120,7 @@ async def seed_contract(database: str) -> tuple[list[str], list[str], dict, str]
         )
         await session.execute(
             text(
-                "INSERT INTO media_asset(public_id,object_key,asset_type,content_type,"
+                "INSERT IGNORE INTO media_asset(public_id,object_key,asset_type,content_type,"
                 "size_bytes,sha256,status,security_status,width,height,created_by,created_at) "
                 "VALUES(:id,:key,'images','image/png',1,:hash,'CONFIRMED','SKIPPED',1,1,'acceptance',:now)"
             ),
@@ -131,6 +131,18 @@ async def seed_contract(database: str) -> tuple[list[str], list[str], dict, str]
                 "now": now,
             },
         )
+        # Reusable test kits share this one private fixture object. Production
+        # media deduplicates by (asset_type,sha256), so repeated seeds must too.
+        image = await session.scalar(
+            text(
+                "SELECT public_id FROM media_asset WHERE asset_type='images' AND sha256=:hash "
+                "AND size_bytes=1 AND content_type='image/png' AND status='CONFIRMED' "
+                "AND object_key LIKE 'sealed/media/images/%'"
+            ),
+            {"hash": "0" * 64},
+        )
+        assert image is not None, "private image fixture metadata mismatch"
+        content["cover_asset_id"] = image
         version = int(
             await session.scalar(text("SELECT COALESCE(MAX(version),0)+1 FROM open_scene_config"))
         )

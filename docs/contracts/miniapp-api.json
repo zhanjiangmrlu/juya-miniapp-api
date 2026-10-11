@@ -851,6 +851,35 @@
         "operationId": "history_api_v1_history_scenes_get",
         "parameters": [
           {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
             "name": "Authorization",
             "in": "header",
             "required": false,
@@ -873,9 +902,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response History Api V1 History Scenes Get"
+                  "$ref": "#/components/schemas/SceneHistoryPageResponse"
                 }
               }
             }
@@ -2334,6 +2361,73 @@
         }
       }
     },
+    "/api/v1/favorite-snapshots/{favorite_id}/resources/{target_id}/signed-url": {
+      "get": {
+        "tags": [
+          "favorite-snapshots"
+        ],
+        "summary": "Signed Url",
+        "operationId": "signed_url_api_v1_favorite_snapshots__favorite_id__resources__target_id__signed_url_get",
+        "parameters": [
+          {
+            "name": "favorite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Favorite Id"
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Target Id"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoriteResourceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/pronunciations/{target_id}/resolve": {
       "post": {
         "tags": [
@@ -2607,6 +2701,84 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PronunciationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/short-readings/history": {
+      "get": {
+        "tags": [
+          "short-readings"
+        ],
+        "summary": "Reading History",
+        "operationId": "reading_history_api_v1_short_readings_history_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingHistoryPage"
                 }
               }
             }
@@ -5040,6 +5212,31 @@
         ],
         "title": "FavoriteRequest"
       },
+      "FavoriteResourceResponse": {
+        "properties": {
+          "resource_id": {
+            "type": "string",
+            "title": "Resource Id"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "resource_id",
+          "url",
+          "expires_at"
+        ],
+        "title": "FavoriteResourceResponse"
+      },
       "FavoriteSnapshotCancelResponse": {
         "properties": {
           "favorite_id": {
@@ -6454,6 +6651,112 @@
         ],
         "title": "ReadingDetail"
       },
+      "ReadingHistoryItem": {
+        "properties": {
+          "content_id": {
+            "type": "string",
+            "title": "Content Id"
+          },
+          "title_en": {
+            "type": "string",
+            "title": "Title En"
+          },
+          "title_zh": {
+            "type": "string",
+            "title": "Title Zh"
+          },
+          "saved_content_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Saved Content Version"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "last_read_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Read At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "can_open": {
+            "type": "boolean",
+            "title": "Can Open"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_id",
+          "title_en",
+          "title_zh",
+          "saved_content_version",
+          "started_at",
+          "last_read_at",
+          "completed_at",
+          "can_open"
+        ],
+        "title": "ReadingHistoryItem"
+      },
+      "ReadingHistoryPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingHistoryItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "started_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Started Count"
+          },
+          "completed_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Completed Count"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "started_count",
+          "completed_count",
+          "next_cursor",
+          "has_more"
+        ],
+        "title": "ReadingHistoryPage"
+      },
       "ReadingPageResponse": {
         "properties": {
           "items": {
@@ -6868,6 +7171,11 @@
       },
       "SceneDetail": {
         "properties": {
+          "recording_enabled": {
+            "type": "boolean",
+            "title": "Recording Enabled",
+            "default": false
+          },
           "content_id": {
             "type": "string",
             "title": "Content Id"
@@ -6968,6 +7276,112 @@
           "title_zh"
         ],
         "title": "SceneDetail"
+      },
+      "SceneHistoryItemResponse": {
+        "properties": {
+          "scene_id": {
+            "type": "string",
+            "title": "Scene Id"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "position": {
+            "$ref": "#/components/schemas/SceneHistoryPositionResponse"
+          },
+          "client_sequence": {
+            "type": "integer",
+            "title": "Client Sequence"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "last_learned_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Learned At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "scene_id",
+          "source_type",
+          "position",
+          "client_sequence",
+          "started_at",
+          "completed_at",
+          "last_learned_at"
+        ],
+        "title": "SceneHistoryItemResponse"
+      },
+      "SceneHistoryPageResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SceneHistoryItemResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "has_more",
+          "next_cursor"
+        ],
+        "title": "SceneHistoryPageResponse"
+      },
+      "SceneHistoryPositionResponse": {
+        "properties": {
+          "entry_id": {
+            "type": "string",
+            "title": "Entry Id"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "entry_id",
+          "offset"
+        ],
+        "title": "SceneHistoryPositionResponse"
       },
       "SceneOpenResult": {
         "properties": {

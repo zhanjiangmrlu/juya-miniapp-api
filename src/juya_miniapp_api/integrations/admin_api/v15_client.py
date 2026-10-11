@@ -132,6 +132,16 @@ class AdminV15Client(AdminApiClient):
             "POST", f"/internal/v1/pronunciations/{segment(target_id)}/resolve", context
         )
 
+    async def review_resource(
+        self, user_id: str, favorite_id: str, target_id: str, resource_version: str | None
+    ) -> dict[str, Any]:
+        return await self._request_json(
+            "POST",
+            f"/internal/v1/favorite-snapshots/{segment(favorite_id)}/resources/"
+            f"{segment(target_id)}/signed-url",
+            {"user_id": user_id, "resource_version": resource_version},
+        )
+
     async def poll(self, task_id: str, context: dict[str, object]) -> dict[str, Any]:
         return await self._request_json(
             "POST", f"/internal/v1/pronunciations/tasks/{segment(task_id)}", context

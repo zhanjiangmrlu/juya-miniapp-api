@@ -538,6 +538,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/favorite-snapshots/{favorite_id}/resources/{target_id}/signed-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Signed Url */
+        get: operations["signed_url_api_v1_favorite_snapshots__favorite_id__resources__target_id__signed_url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pronunciations/{target_id}/resolve": {
         parameters: {
             query?: never;
@@ -564,6 +581,23 @@ export interface paths {
         };
         /** Poll */
         get: operations["poll_api_v1_pronunciations_tasks__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/short-readings/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reading History */
+        get: operations["reading_history_api_v1_short_readings_history_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1309,6 +1343,18 @@ export interface components {
             /** Source Locator */
             source_locator: string;
         };
+        /** FavoriteResourceResponse */
+        FavoriteResourceResponse: {
+            /** Resource Id */
+            resource_id: string;
+            /** Url */
+            url: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
         /** FavoriteSnapshotCancelResponse */
         FavoriteSnapshotCancelResponse: {
             /** Favorite Id */
@@ -1734,6 +1780,44 @@ export interface components {
             whole_audio?: components["schemas"]["WholeAudio"] | null;
             progress?: components["schemas"]["ReadingProgress"] | null;
         };
+        /** ReadingHistoryItem */
+        ReadingHistoryItem: {
+            /** Content Id */
+            content_id: string;
+            /** Title En */
+            title_en: string;
+            /** Title Zh */
+            title_zh: string;
+            /** Saved Content Version */
+            saved_content_version: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Last Read At
+             * Format: date-time
+             */
+            last_read_at: string;
+            /** Completed At */
+            completed_at: string | null;
+            /** Can Open */
+            can_open: boolean;
+        };
+        /** ReadingHistoryPage */
+        ReadingHistoryPage: {
+            /** Items */
+            items: components["schemas"]["ReadingHistoryItem"][];
+            /** Started Count */
+            started_count: number;
+            /** Completed Count */
+            completed_count: number;
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Has More */
+            has_more: boolean;
+        };
         /** ReadingPageResponse */
         ReadingPageResponse: {
             /** Items */
@@ -1907,6 +1991,11 @@ export interface components {
         };
         /** SceneDetail */
         SceneDetail: {
+            /**
+             * Recording Enabled
+             * @default false
+             */
+            recording_enabled: boolean;
             /** Content Id */
             content_id: string;
             /**
@@ -1939,6 +2028,44 @@ export interface components {
             cover_asset_id?: string | null;
             /** Learning Image Asset Id */
             learning_image_asset_id?: string | null;
+        };
+        /** SceneHistoryItemResponse */
+        SceneHistoryItemResponse: {
+            /** Scene Id */
+            scene_id: string;
+            /** Source Type */
+            source_type: string;
+            position: components["schemas"]["SceneHistoryPositionResponse"];
+            /** Client Sequence */
+            client_sequence: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Last Learned At
+             * Format: date-time
+             */
+            last_learned_at: string;
+        };
+        /** SceneHistoryPageResponse */
+        SceneHistoryPageResponse: {
+            /** Items */
+            items: components["schemas"]["SceneHistoryItemResponse"][];
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** SceneHistoryPositionResponse */
+        SceneHistoryPositionResponse: {
+            /** Entry Id */
+            entry_id: string;
+            /** Offset */
+            offset: number;
         };
         /** SceneOpenResult */
         SceneOpenResult: {
@@ -2782,7 +2909,10 @@ export interface operations {
     };
     history_api_v1_history_scenes_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: {
                 Authorization?: string | null;
             };
@@ -2797,9 +2927,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SceneHistoryPageResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3564,6 +3692,40 @@ export interface operations {
             };
         };
     };
+    signed_url_api_v1_favorite_snapshots__favorite_id__resources__target_id__signed_url_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+            };
+            path: {
+                favorite_id: string;
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavoriteResourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     resolve_api_v1_pronunciations__target_id__resolve_post: {
         parameters: {
             query?: never;
@@ -3631,6 +3793,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PronunciationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reading_history_api_v1_short_readings_history_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                Authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingHistoryPage"];
                 };
             };
             /** @description Validation Error */

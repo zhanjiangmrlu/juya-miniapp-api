@@ -13,6 +13,7 @@ from juya_miniapp_api.modules.short_reading.domain import (
     ReadingPreview,
     ReadingProgress,
 )
+from juya_miniapp_api.modules.short_reading.history import ReadingHistoryPage, SQLReadingHistory
 from juya_miniapp_api.modules.short_reading.public_dto import (
     ReadingCompleteResponse,
     ReadingPageResponse,
@@ -35,9 +36,24 @@ def create_short_reading_router(
     authority: V15ReadingAuthority,
     *,
     user_dependency: UserDependency,
+    history: SQLReadingHistory | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/short-readings", tags=["short-readings"])
+
+    @router.get("/history", response_model=ReadingHistoryPage)
+    async def reading_history(
+        response: Response,
+        user_id: Annotated[str, Depends(user_dependency)],
+        cursor: Annotated[str | None, Query(max_length=2048)] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    ) -> ReadingHistoryPage:
+        from juya_miniapp_api.shared.errors import AppError
+
+        response.headers["Cache-Control"] = "private, no-store"
+        if history is None:
+            raise AppError("READING_HISTORY_UNAVAILABLE", "阅读记录暂不可用", 503)
+        return await history.page(user_id, cursor, limit, clock())
 
     @router.get("", response_model=ReadingPageResponse)
     async def listing(

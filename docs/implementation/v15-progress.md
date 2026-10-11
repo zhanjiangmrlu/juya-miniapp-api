@@ -117,3 +117,29 @@
 7. 每次最终代码变化后刷新配置完整运行时OpenAPI/自动生成TS，执行完整静态/隔离SQL门禁，再冻结提交；云、设备、人工、生产独立报告。
 
 Ruling: 沿用用户指定feature分支和本进度ledger，必要独立子任务使用既有代理 — 方案08明确许可且不互改仓库 — 最终契约/运行时/统一门禁由本对话唯一集成。
+
+### 本轮新确证缺口及修复
+
+- `d8ad63c`：首页ENTITLED优先非开放有效权益，开放内容作复习兜底；最久重访排序；问候转换北京时间。场景历史100条硬截断及home单次核权100限制正在补真实分页/分批。
+- `cc61eb3`：新增本人有效收藏固定词汇图GET取址；已装配运行时和actual admin HMAC委托，重签前后复核快照修订，取消/重收/他人/任意target拒绝。前端需消费新增资源接口展示已保存图。
+- 短文新增本人安全history读取及独立started/completed计数，失权/模块关闭/下线仍保留标题与安全进度，不返回正文、译文、音频、paragraph_id或offset。正在执行真实SQL/HTTP回归。
+- admin `learning_features/store.py` 已交付真实 `learning_features_v15`，缺失/坏配置false；SQLContentLoader实际注入SceneDetail.recording_enabled，BFF严格布尔DTO已接入，未编造开启状态。
+- admin0018新增short_reading.sort_order并有真实运营写入；BFF按(sort_order,public_id)排序，游标绑定user及实际发布ID/排序/修订摘要，重排/发布变化422；前后复核排序摘要，不猜配置版本。生产最低schema已提高0018。
+- 第一轮新契约已导出64 paths/73 operations（还在实施，不是最终冻结）。
+
+### 新发现管理后端契约依赖（需协调跟进）
+
+1. **短文安全封面**：actual preview返回cover_asset_id，但BFF ReadingPreview仅供cover_url，当前始终null；正文资源只允许whole_audio。admin v15_access.content_resource/SQLResourceSigner.binding当前一律full_access，不能用这一端点签无权PREVIEW卡封面。需要admin实际交付仅visible+当前发布COVER绑定/媒体审核的签名契约（或preview返回受控cover_url），随后BFF接入；不能通过本地拼OSS公开地址绕过授权。需求30.5/02方案§8。
+2. **保存旧音频版本**：admin pronunciation/service.resolve直接选当前target.uploaded_resource_version，忽略已保存context.resource_version。同target收藏v1后后台换v2会被最终saved.version护栏拒绝403；BFF正确拒绝错版但历史known合法播放性缺失。需admin FAVORITE_REVIEW按已保存固定版本解析，未知历史不造版本。
+3. **历史known媒体类型**：admin回填仍存SCENE/VOCABULARY/PHRASE；BFF查询已明确映射词/语块，但admin SQLFavoriteAuthority直接透传旧entry_type，favorite_resource及SQLResourceSigner只识别word的图角色。known图经本人收藏资源委托仍会拒绝；需admin在历史权威读端规范实际类型，不能让BFF重新猜存档语义。
+4. **历史音频别名**：actual旧SceneContent条目保存audio_version_id，backfill.build_snapshot历史绑定读取resource_version，需上游明确已知audio_version_id和target的同源成对回填，禁止跨快照拼目标与版本。
+
+上述为具体代码/契约缺口，不属于云端或人工验收；本仓继续完成其他安全、历史、排序、Socket入口与完整门禁，新增依赖不作为停止全部工作的理由。
+
+### 第二轮中间交付门禁（2026-10-11）
+
+- Ruff全部通过；220文件格式通过；mypy检查130源文件无错误。
+- 本次重新执行完整私有门禁：326 passed/1 external skip，覆盖83.15%，36.42s；实际admin迁移0018、私有MySQL/Redis、双服务Socket及合法JWT/session/HMAC/SQL。唯一skip仍为外部OSS授权环境验收。
+- 本轮录音schema2字段、短文运营排序、本人阅读历史、收藏词汇图运行时及64 paths/73 operations的JSON/TS一同作中间提交，消费者可立即接入。SHA见v15-contract-handoff.md。
+- 独立评审另确证schema1旧场景录音开关未透传；actual POST /internal/v1/learning-features已有装配，本仓随后补已授权旧场景的权威外层字段，前端旧adapter也需透传。此中间提交不宣称此项已完成。
+- 协调侧运行9dee3a7a3b3d4fc7bd8f48a56b1df80e记录PREFLIGHT_PASSED，私有资源已清理；该跨项目预检由协调侧执行，不代替最终页面验收。

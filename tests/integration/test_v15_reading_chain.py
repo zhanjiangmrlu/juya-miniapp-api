@@ -18,6 +18,7 @@ from juya_miniapp_api.integrations.admin_api.v15_client import AdminV15Client
 from juya_miniapp_api.integrations.admin_api.v15_guard import FinalFactsGuard
 from juya_miniapp_api.modules.short_reading.authority import V15ReadingAuthority
 from juya_miniapp_api.modules.short_reading.domain import ReadingPosition
+from juya_miniapp_api.modules.short_reading.history import SQLReadingHistory
 from juya_miniapp_api.modules.short_reading.router import create_short_reading_router
 from juya_miniapp_api.modules.short_reading.service import ShortReadingService
 from juya_miniapp_api.modules.short_reading.sql_repository import SQLAlchemyReadingRepository
@@ -170,7 +171,12 @@ async def test_reading_actual_hmac_preview_grants_progress_completion_and_module
                 )
 
             bff.include_router(
-                create_short_reading_router(reading_service, authority, user_dependency=owner)
+                create_short_reading_router(
+                    reading_service,
+                    authority,
+                    user_dependency=owner,
+                    history=SQLReadingHistory(sessions),
+                )
             )
             async with httpx.AsyncClient(
                 base_url="http://bff", transport=httpx.ASGITransport(app=bff)
@@ -193,6 +199,47 @@ async def test_reading_actual_hmac_preview_grants_progress_completion_and_module
                     row for row in listing.json()["items"] if row["content_id"] == reading
                 )
                 assert listed == preview.json()
+                # Operational ordering comes from the actual admin-owned integer,
+                # with public_id tie-breaking and a live order snapshot in the cursor.
+                async with sessions() as session, session.begin():
+                    extra = await store.create_within(session, series, fixture, user)
+                    await session.execute(
+                        text(
+                            "UPDATE short_reading_revision SET status='PUBLISHED' "
+                            "WHERE public_id=:r"
+                        ),
+                        {"r": extra["revision_id"]},
+                    )
+                    await session.execute(
+                        text(
+                            "UPDATE short_reading SET status='PUBLISHED',published_revision_id=:r,"
+                            "sort_order=-2147483599 WHERE public_id=:id"
+                        ),
+                        {"id": extra["content_id"], "r": extra["revision_id"]},
+                    )
+                    await session.execute(
+                        text("UPDATE short_reading SET sort_order=-2147483600 WHERE public_id=:id"),
+                        {"id": reading},
+                    )
+                first_page = await public.get("/api/v1/short-readings", params={"limit": 1})
+                assert first_page.json()["items"][0]["content_id"] == reading
+                order_cursor = first_page.json()["next_cursor"]
+                second_page = await public.get(
+                    "/api/v1/short-readings", params={"limit": 1, "cursor": order_cursor}
+                )
+                assert second_page.json()["items"][0]["content_id"] == extra["content_id"]
+                with pytest.raises(AppError) as other_cursor:
+                    await authority.listing(stranger, order_cursor, 1)
+                assert other_cursor.value.code == "CURSOR_INVALID"
+                async with sessions() as session, session.begin():
+                    await session.execute(
+                        text("UPDATE short_reading SET sort_order=2 WHERE public_id=:id"),
+                        {"id": reading},
+                    )
+                outdated = await public.get(
+                    "/api/v1/short-readings", params={"limit": 1, "cursor": order_cursor}
+                )
+                assert outdated.status_code == 422 and outdated.json()["code"] == "CURSOR_INVALID"
                 assert (await public.post(prefix + "/open")).status_code == 403
                 assert (
                     await public.get(
@@ -311,6 +358,17 @@ async def test_reading_actual_hmac_preview_grants_progress_completion_and_module
                     headers={"Idempotency-Key": "done"},
                 )
                 assert expired_replay.status_code == 403
+                summary = await public.get("/api/v1/short-readings/history")
+                assert summary.status_code == 200, summary.text
+                assert summary.json()["started_count"] == summary.json()["completed_count"] == 1
+                assert summary.json()["items"][0]["title_zh"] == fixture["title_zh"]
+                assert not summary.json()["items"][0]["can_open"]
+                assert not {"paragraph_id", "offset", "whole_audio", "translation_zh"}.intersection(
+                    summary.json()["items"][0]
+                )
+                assert (
+                    await SQLReadingHistory(sessions).page(stranger, None, 20, datetime.now(UTC))
+                ).started_count == 0
                 async with sessions() as session, session.begin():
                     await session.execute(
                         text(
@@ -438,6 +496,21 @@ async def test_reading_actual_hmac_preview_grants_progress_completion_and_module
                     headers={"Idempotency-Key": "done"},
                 )
                 assert replay.status_code == 403
+                assert (await public.get("/api/v1/short-readings")).status_code == 403
+                history_closed = await public.get("/api/v1/short-readings/history")
+                assert (
+                    history_closed.status_code == 200
+                    and history_closed.json()["completed_count"] == 1
+                )
+                assert not history_closed.json()["items"][0]["can_open"]
+                async with sessions() as session, session.begin():
+                    await session.execute(
+                        text("UPDATE short_reading SET status='OFFLINE' WHERE public_id=:id"),
+                        {"id": reading},
+                    )
+                history_offline = await public.get("/api/v1/short-readings/history")
+                assert history_offline.json()["items"][0]["title_zh"] == fixture["title_zh"]
+                assert history_offline.json()["completed_count"] == 1
                 conflict = await public.post(
                     prefix + "/complete",
                     json={"content_version": 2},

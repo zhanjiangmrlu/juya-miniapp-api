@@ -1,7 +1,5 @@
-import base64
-import json
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import Field
 from sqlalchemy import text
@@ -13,6 +11,7 @@ from juya_miniapp_api.integrations.admin_api.v15_client import AdminV15Client
 from juya_miniapp_api.integrations.admin_api.v15_facts import SQLAuthorizer
 from juya_miniapp_api.modules.favorites.snapshots import StrictModel, request_digest
 from juya_miniapp_api.modules.short_reading.domain import Paragraph, ReadingDetail, ReadingPreview
+from juya_miniapp_api.modules.short_reading.order import ReadingListCursor
 from juya_miniapp_api.shared.errors import AppError
 
 
@@ -62,46 +61,59 @@ class V15ReadingAuthority:
         )
 
     async def listing(self, user_id: str, cursor: str | None, limit: int) -> dict[str, object]:
-        scope = request_digest([user_id, "short_reading", 2])
-        after = ""
-        if cursor:
-            try:
-                saved = json.loads(base64.urlsafe_b64decode(cursor))
-                if saved["scope"] != scope or not isinstance(saved["after"], str):
-                    raise ValueError("scope")
-                after = saved["after"]
-            except (ValueError, KeyError, TypeError) as error:
-                raise AppError("CURSOR_INVALID", "分页位置已失效,请刷新", 422) from error
+        if not 1 <= limit <= 100:
+            raise AppError("PAGINATION_INVALID", "分页参数无效", 422)
         async with self.sessions() as session:
-            ids: Any = (
-                (
-                    await session.execute(
-                        text(
-                            "SELECT public_id FROM short_reading WHERE status='PUBLISHED' "
-                            "AND public_id>:after ORDER BY public_id LIMIT :limit"
-                        ),
-                        {"after": after, "limit": limit + 1},
-                    )
-                )
-                .scalars()
-                .all()
+            allowed = await session.scalar(
+                text(
+                    "SELECT u.id FROM user_account u JOIN learning_module_config m "
+                    "ON m.module_type='short_reading' AND m.enabled=1 "
+                    "WHERE u.public_id=:user AND u.status='ACTIVE'"
+                ),
+                {"user": user_id},
             )
+            if allowed is None:
+                raise AppError("CONTENT_ACCESS_DENIED", "短文入口当前不可用", 403)
+        rows = await self._order_snapshot()
+        version = request_digest(rows)
+        after = ReadingListCursor.decode(user_id, version, cursor) if cursor else None
+        candidates = [
+            row
+            for row in rows
+            if after is None or (row[0], row[1]) > (after.sort_order, after.content_id)
+        ]
         items = []
-        for identity in ids[:limit]:
+        for _, identity, _ in candidates[:limit]:
             try:
                 items.append((await self.preview(user_id, str(identity))).model_dump(mode="json"))
             except AppError as error:
                 if error.status_code != 403:
                     raise
-        has_more = len(ids) > limit
+        if request_digest(await self._order_snapshot()) != version:
+            raise AppError("CURSOR_INVALID", "内容顺序已变化,请刷新", 422)
+        has_more = len(candidates) > limit
         next_cursor = (
-            base64.urlsafe_b64encode(
-                json.dumps({"scope": scope, "after": str(ids[limit - 1])}).encode()
-            ).decode()
+            ReadingListCursor(candidates[limit - 1][0], candidates[limit - 1][1]).encode(
+                user_id, version
+            )
             if has_more
             else None
         )
         return {"items": items, "has_more": has_more, "next_cursor": next_cursor}
+
+    async def _order_snapshot(self) -> list[tuple[int, str, str | None]]:
+        # The shared admin-owned order is authoritative. Its content digest also
+        # invalidates cursors on reorders/publication changes without guessed config keys.
+        async with self.sessions() as session:
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT sort_order,public_id,published_revision_id FROM short_reading "
+                        "WHERE status='PUBLISHED' ORDER BY sort_order ASC,public_id ASC"
+                    )
+                )
+            ).all()
+        return [(int(row[0]), str(row[1]), row[2]) for row in rows]
 
     async def open_reading(self, user_id: str, identity: str) -> ReadingDetail:
         raw = await self.client.reading_detail(user_id, identity)

@@ -17,6 +17,7 @@ from sqlalchemy import text
 from juya_miniapp_api.infrastructure.db.session import create_engine, create_session_factory
 from juya_miniapp_api.integrations.admin_api.v15_client import AdminV15Client
 from juya_miniapp_api.integrations.admin_api.v15_guard import FinalFactsGuard
+from juya_miniapp_api.modules.favorites.resources import FavoriteResourceService
 from juya_miniapp_api.modules.favorites.snapshots import SnapshotReference, SnapshotService
 from juya_miniapp_api.modules.favorites.snapshots_sql import SQLAlchemySnapshotRepository
 from juya_miniapp_api.shared.errors import AppError
@@ -74,6 +75,7 @@ async def test_hmac_authority_snapshot_final_facts_source_gate_and_review_indepe
                 "source_sentence": "A medium coffee.",
                 "confirmed": True,
                 "pronunciation_target_id": "cup-audio",
+                "icon_asset_id": "saved-cup-image",
                 "audio_version_id": "cup-v1",
             },
             {
@@ -219,6 +221,27 @@ async def test_hmac_authority_snapshot_final_facts_source_gate_and_review_indepe
             guard = FinalFactsGuard(secret)
             repo = SQLAlchemySnapshotRepository(sessions, guard.snapshot)
             snapshots = SnapshotService(repo, client)
+            assert not (await client.scene_detail(user, "word_card", scene)).recording_enabled
+            async with sessions() as session, session.begin():
+                await session.execute(
+                    text(
+                        "INSERT INTO system_config(config_key,value,version) "
+                        "VALUES('learning_features_v15',JSON_OBJECT('recording_enabled',TRUE),1) "
+                        "ON DUPLICATE KEY UPDATE value=JSON_OBJECT('recording_enabled',TRUE),"
+                        "version=version+1"
+                    )
+                )
+            try:
+                assert (await client.scene_detail(user, "word_card", scene)).recording_enabled
+            finally:
+                async with sessions() as session, session.begin():
+                    await session.execute(
+                        text(
+                            "UPDATE system_config SET value=JSON_OBJECT('recording_enabled',FALSE),"
+                            "version=version+1 WHERE config_key='learning_features_v15'"
+                        )
+                    )
+            assert not (await client.scene_detail(user, "word_card", scene)).recording_enabled
             ref = SnapshotReference(
                 content_type="word_card",
                 content_id=scene,
@@ -364,7 +387,16 @@ async def test_hmac_authority_snapshot_final_facts_source_gate_and_review_indepe
                 {"user_id": user, "resource_version": "cup-v1"},
             )
             assert resource["target_id"] == "cup-audio"
+            saved_image = await FavoriteResourceService(snapshots, client).signed_url(
+                user, first.favorite_id, "saved-cup-image"
+            )
+            assert saved_image.resource_id == "saved-cup-image"
             await snapshots.cancel(user, first.favorite_id, "cancel", datetime.now(UTC))
+            with pytest.raises(AppError) as cancelled_image:
+                await FavoriteResourceService(snapshots, client).signed_url(
+                    user, first.favorite_id, "saved-cup-image"
+                )
+            assert cancelled_image.value.status_code == 404
             with pytest.raises(AppError):
                 await client._request_json(
                     "POST",

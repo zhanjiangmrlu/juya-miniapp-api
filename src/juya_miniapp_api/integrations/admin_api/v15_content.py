@@ -60,6 +60,7 @@ class PublishedSentence(StrictModel):
 
 
 class SceneDetail(StrictModel):
+    recording_enabled: bool = Field(default=False, strict=True)
     content_id: str
     content_type: Literal["dialogue", "word_card"]
     content_version: int = Field(ge=1)
