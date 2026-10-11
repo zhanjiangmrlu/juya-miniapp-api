@@ -67,7 +67,7 @@ $env:JUYA_ENABLE_BEAT = "true"
 | `JUYA_DATABASE_URL` | `mysql+asyncmy://` RDS/MySQL 地址 |
 | `JUYA_REDIS_URL` | Redis Broker、缓存、限流和 nonce 存储 |
 | `JUYA_ADMIN_API_BASE_URL` | admin-api 内网地址 |
-| `JUYA_INTERNAL_HMAC_SECRET` | 两服务内部请求签名密钥 |
+| `JUYA_INTERNAL_HMAC_SECRET` | 内部请求及 V1.5 收藏确认凭据的共享签名密钥，至少 16 个 UTF-8 字节 |
 | `JUYA_JWT_SECRET` / `JUYA_JWT_KEY_ID` | access token 签名和密钥版本 |
 | `JUYA_FIELD_ENCRYPTION_KEY_BASE64` | 16/24/32 字节 AES 密钥的 URL-safe Base64 |
 | `JUYA_FIELD_LOOKUP_KEY` | OpenID/微信号精确匹配 HMAC 密钥 |
@@ -76,6 +76,10 @@ $env:JUYA_ENABLE_BEAT = "true"
 | `JUYA_OSS_ACCESS_KEY_ID` / `JUYA_OSS_ACCESS_KEY_SECRET` | OSS 临时上传策略签名 |
 
 密钥应由阿里云 KMS 或云效密钥变量注入，禁止写入仓库。生产 API 只经 SLB/Nginx 暴露 HTTPS；worker 不开放端口。RDS、Redis、OSS 和 admin-api 仅走内网。
+
+V1.5 的 `FinalFactsGuard` 与管理端 `CredentialCodec` 均拒绝少于 16 字节的 `JUYA_INTERNAL_HMAC_SECRET`。建议使用至少 32 个随机字节生成共享密钥，通过安全配置注入 mini API、admin API 及双方相关 worker/beat；值须一致。`.env.example` 中仅为占位值，使用前须替换。`JUYA_JWT_SECRET` 不作为此密钥的回退，不能靠补字符或降低长度守卫修复历史短密钥。
+
+升级前应一起核对共享密钥、两端代码和数据库基线。本地旧容器绑定当前工作区 `src` 时，重启会加载该目录的新代码，即使镜像标签未变；无源码挂载的旧 worker 正常不代表 V1.5 API 已兼容。2026-10-11 的只读案例见 [共享主站配置诊断](docs/implementation/v15-shared-main-readonly-diagnosis.md)。共享主站恢复、版本升级与四项目隔离验收分别记录；本说明不授权重建共享主站或修改其配置。
 
 ## 数据库和跨服务契约
 
