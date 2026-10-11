@@ -179,8 +179,11 @@ class InMemorySnapshotRepository:
             if replay:
                 return replay
             data = await confirm()
-            if data.reference != ref.model_copy(
-                update={"entry_type": ref.entry_type or data.reference.entry_type}
+            if (
+                data.reference.model_dump()
+                != ref.model_copy(
+                    update={"entry_type": ref.entry_type or data.reference.entry_type}
+                ).model_dump()
             ):
                 raise AppError("CONTENT_VERSION_CONFLICT", "内容已更新,请刷新后收藏", 409)
             ref = data.reference

@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from juya_miniapp_api.modules.favorites.snapshots import (
     ConfirmedSnapshot,
     InMemorySnapshotRepository,
+    SnapshotCreateReference,
     SnapshotReference,
     SnapshotService,
 )
@@ -45,6 +46,48 @@ class Authority:
             source_locator={"sentence_id": "sentence-1"},
             pronunciation={"target_id": "target-" + ref.sense_id, "resource_version": "v1"},
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", [None, "word"])
+async def test_public_request_subtype_matches_exact_authoritative_reference_values(kind):
+    payload = SnapshotCreateReference(
+        **reference().model_dump(exclude={"entry_type"}), entry_type=kind
+    )
+
+    class PublicAuthority(Authority):
+        async def confirm_snapshot(self, user_id, ref):
+            fixed = await super().confirm_snapshot(user_id, ref)
+            return fixed.model_copy(
+                update={"reference": SnapshotReference.model_validate(fixed.reference.model_dump())}
+            )
+
+    service = SnapshotService(InMemorySnapshotRepository(), PublicAuthority())
+    row = await service.create("owner", payload, "public-create", NOW)
+    assert row.active and row.data.reference.entry_type == "word"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"content_version": 2},
+        {"source_id": "another-source"},
+        {"entry_type": "chunk"},
+    ],
+)
+async def test_public_subtype_still_rejects_changed_authoritative_reference_fields(change):
+    payload = SnapshotCreateReference.model_validate(reference().model_dump() | change)
+
+    class FixedAuthority(Authority):
+        async def confirm_snapshot(self, user_id, ref):
+            return await super().confirm_snapshot(user_id, reference())
+
+    with pytest.raises(AppError) as mismatch:
+        await SnapshotService(InMemorySnapshotRepository(), FixedAuthority()).create(
+            "owner", payload, "mismatched-reference", NOW
+        )
+    assert mismatch.value.code == "CONTENT_VERSION_CONFLICT"
 
 
 @pytest.mark.asyncio
