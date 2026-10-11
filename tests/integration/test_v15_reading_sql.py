@@ -93,9 +93,11 @@ async def test_mysql_reading_is_independent_idempotent_and_rechecks_facts_in_tra
         # Same key is independent for a different stable content object.
         assert (await repo.complete(user, "reading-other", "done", 1, paragraphs, now)).created
         denied = True
-        # Committed receipt can replay without obtaining full text entitlement again.
-        assert await repo.replay_completion(user, "reading", "done", 1) == first
-        assert await repo.complete(user, "reading", "done", 1, paragraphs, now) == first
+        # A committed receipt does not bypass current transaction-level access.
+        with pytest.raises(AppError):
+            await repo.replay_completion(user, "reading", "done", 1)
+        with pytest.raises(AppError):
+            await repo.complete(user, "reading", "done", 1, paragraphs, now)
         with pytest.raises(AppError):
             await repo.save(user, "reading", position, now)
         with pytest.raises(AppError):

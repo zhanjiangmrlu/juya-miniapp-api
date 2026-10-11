@@ -23,7 +23,7 @@ await service.complete(user_id, content_id, idempotency_key, content_version, no
 - `replay_completion(user_id, content_id, key, version)`：读取已提交成功命令，绑定用户、稳定内容ID、键和版本；不同版本复用键返回409 IDEMPOTENCY_CONFLICT。
 - `complete(user_id, content_id, key, version, paragraphs, now)`：在锁内重验幂等，再保留当前合法最新位置、原完成时间并写稳定完成状态及幂等结果。
 
-`SQLAlchemyReadingRepository(sessions, guard)` 的 guard 必填，签名仍为 `async guard(session: AsyncSession, user_id: str, content_id: str, version: int) -> None`。该函数必须使用调用方传入的事务session取得当前发布／模块／授权事实的锁并最终核对账号、正文权限和版本，不得独立提交／另开session。仓库先锁ACTIVE用户，再查幂等／事实／进度；新open/save/complete都调用guard，缓存或前置HTTP检查不能取代最终事实校验。进度查询也限定ACTIVE账号。
+`SQLAlchemyReadingRepository(sessions, guard)` 的 guard 必填，签名为 `async guard(session: AsyncSession, user_id: str, content_id: str, version: int | None) -> None`。该函数必须使用调用方传入的事务session取得当前发布／模块／授权事实的锁并最终核对账号、正文权限和版本，不得独立提交／另开session。仓库先锁ACTIVE用户，再查事实／幂等／进度；新open/save/complete和成功收据重放都调用guard，缓存或前置HTTP检查不能取代最终事实校验。进度查询也限定ACTIVE账号。重放使用version=None，只跳过旧命令版本与当前发布版本的相等校验，仍要求当前已发布版本和有效正文权限；新写入使用整数version。
 
 ## 序号、位置及幂等
 
@@ -31,7 +31,7 @@ await service.complete(user_id, content_id, idempotency_key, content_version, no
 
 读完幂等写入现有 `user_command_dedup`：endpoint固定 `v15:reading:complete`，存储键为hash(content_id,客户端key)，request_hash绑定content_id和版本。相同用户的不同内容可使用相同客户端键；不同用户互不影响。幂等结果与进度同事务提交，ACTIVE用户锁保证并发只有一个首次created=true。
 
-service.complete先查已提交收据，再获取全文授权；成功原命令可在原文权益到期／发布版本变化后重放，不重新赋予正文授权。账号ACTIVE仍由公共依赖和SQL收据入口检查。新键／未提交命令仍每次完整授权并在最终SQLguard内检查事实。收据沿用快照命令生命周期，用户清空／注销由主执行者统一删除 `v15:%`命令记录；本模块不因追溯而保留已删除用户的数据。
+service.complete先获取当前全文授权，再查询已提交收据，仓储在用户锁后再次核当前权限。模块关闭、账号失效、权益过期或内容下线时，成功原命令也拒绝重放；当前仍有全文权限时，发布版本变化不阻止同键同原请求版本的进度元数据重放。新键／未提交命令仍核对请求版本并在最终SQLguard内检查事实。收据沿用快照命令生命周期，用户清空／注销由主执行者统一删除 `v15:%`命令记录；本模块不因追溯而保留已删除用户的数据。
 
 ## 验证记录
 
@@ -39,8 +39,8 @@ service.complete先查已提交收据，再获取全文授权；成功原命令�
 
 - RED：先补5个行为测试。加入领域序号字段后观察真实失败：旧请求把offset5回退到1；open／complete排在较新save后却覆盖旧位置；完成无created／版本幂等；无效旧锚点继续返回。
 - GREEN：内存仓库／service移到锁内位置保留、序号保护和完成幂等，9项unit通过。
-- SQL真实验证：`uv run python scripts/test-v15-isolated.py tests/integration/test_v15_reading_sql.py -q` 创建私有UUID MySQL／Redis，应用管理端最新迁移，2项SQL测试通过；临时容器由脚本finally清理，无共享服务重启。覆盖last_client_sequence、同版乱序／重复序号、新版重置、读完key／版本绑定、原收据免全文授权重放、新命令guard拒绝、实际用户行锁竞争，以及场景进度／完成事件／打卡均为0。
+- 最新SQL真实验证：`.venv/Scripts/python.exe scripts/test-v15-isolated.py tests/integration/test_v15_reading_chain.py tests/integration/test_v15_reading_sql.py -q --tb=short` 创建私有UUID MySQL／Redis，应用管理端最新迁移，3项SQL测试通过（1.82s）；临时容器由脚本finally清理，无共享服务重启。覆盖last_client_sequence、同版乱序／重复序号、新版重置、读完key／版本绑定、成功收据当前授权复核、实际用户行锁竞争，以及场景进度／完成事件／打卡均为0。
 - 并发SQL测试先等待performance_schema确认命令进入实际用户锁等待，再放行事务，避免按固定时间猜测执行顺序；并发序号10至15最后只保留15，完成时间仍一致。
 - Ruff、format、mypy检查4个实现文件和相应测试；9项unit／2项SQL通过。完整普通pytest运行时190 passed／15 skipped／2 failed，失败是集成进行中的OpenAPI快照不同及favorites confirmation测试MockTransport缺少base_url；已交主执行者处理，未越界修改。
 
-真实授权guard、BFF内部HMAC及HTTP完整链路由集成负责人验收；本模块的可控guard测试仅证明事务调用边界，不宣称已验证实际权益计算。没有调用外部收费服务，也没有微信设备、人工内容、听音或生产验收。
+最新补测已通过实际授权guard、admin内部HMAC和Redis及BFF HTTP短文链路；当前13项单元测试、模块mypy与Ruff通过。完整说明和上游运营排序依赖见 `v15-reading-chain.md`、`v15-reading-followup.md`。没有调用外部收费服务，也没有微信设备、人工内容、听音、云端OSS或生产验收。

@@ -238,7 +238,7 @@ async def test_completion_queued_behind_save_keeps_latest_position_in_lock() -> 
 
 
 @pytest.mark.asyncio
-async def test_complete_keys_bind_user_content_and_version_replay_before_current_access() -> None:
+async def test_complete_keys_bind_user_content_and_version_and_recheck_current_access() -> None:
     repo = InMemoryReadingRepository()
     authority = Authority()
     service = ShortReadingService(authority, repo)
@@ -247,15 +247,49 @@ async def test_complete_keys_bind_user_content_and_version_replay_before_current
     again = await service.complete("user", "reading", "new", 1, NOW)
     assert not again.created
     authority.version = 2
+    assert await service.complete("user", "reading", "same", 1, NOW) == first
     with pytest.raises(AppError) as conflict:
         await service.complete("user", "reading", "same", 2, NOW)
     assert conflict.value.code == "IDEMPOTENCY_CONFLICT"
     authority.denied = True
-    assert await service.complete("user", "reading", "same", 1, NOW) == first
+    with pytest.raises(AppError) as denied:
+        await service.complete("user", "reading", "same", 1, NOW)
+    assert denied.value.status_code == 403
     authority.denied = False
     authority.version = 1
     assert (await service.complete("other-user", "reading", "same", 1, NOW)).created
     assert len(repo.completion_events) == 2
+
+
+@pytest.mark.asyncio
+async def test_replay_rechecks_facts_under_repository_lock_without_requiring_old_version() -> None:
+    current = 1
+    allowed = True
+
+    async def guard(user_id: str, content_id: str, version: int | None) -> None:
+        assert repo._lock.locked()
+        if not allowed:
+            raise AppError("CONTENT_ACCESS_DENIED", "授权已撤回", 403)
+        if version is not None and version != current:
+            raise AppError("CONTENT_VERSION_CONFLICT", "短文已更新", 409)
+
+    repo = InMemoryReadingRepository(guard)
+    authority = Authority()
+    service = ShortReadingService(authority, repo)
+    first = await service.complete("user", "reading", "done", 1, NOW)
+    current = authority.version = 2
+    assert await service.complete("user", "reading", "done", 1, NOW) == first
+    # HTTP authority can have succeeded before policy changes at the final lock boundary.
+    allowed = False
+    for operation in (
+        service.complete("user", "reading", "done", 1, NOW),
+        repo.replay_completion("user", "reading", "done", 1),
+        repo.complete("user", "reading", "done", 1, {"p1": 6}, NOW),
+    ):
+        with pytest.raises(AppError) as denied:
+            await operation
+        assert denied.value.status_code == 403
+    assert len(repo.completion_events) == 1
 
 
 @pytest.mark.asyncio

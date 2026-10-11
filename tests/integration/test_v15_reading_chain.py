@@ -305,6 +305,12 @@ async def test_reading_actual_hmac_preview_grants_progress_completion_and_module
                     )
                 assert (await public.post(prefix + "/open")).status_code == 403
                 assert (await public.get(prefix + "/preview")).json()["access"] == "PREVIEW"
+                expired_replay = await public.post(
+                    prefix + "/complete",
+                    json={"content_version": 1},
+                    headers={"Idempotency-Key": "done"},
+                )
+                assert expired_replay.status_code == 403
                 async with sessions() as session, session.begin():
                     await session.execute(
                         text(
@@ -340,6 +346,13 @@ async def test_reading_actual_hmac_preview_grants_progress_completion_and_module
                 assert progress["saved_content_version"] == 2 and progress["paragraph_id"] is None
                 assert progress["offset"] == 0 and progress["client_sequence"] == 0
                 assert progress["completed_at"] == completed_at
+                # Re-authorize the current publication but replay the original command metadata.
+                versioned_replay = await public.post(
+                    prefix + "/complete",
+                    json={"content_version": 1},
+                    headers={"Idempotency-Key": "done"},
+                )
+                assert versioned_replay.json() == completed.json()
                 with pytest.raises(AppError) as old_guard:
                     await repository.open(user, reading, 1, {"first": 30}, datetime.now(UTC))
                 assert old_guard.value.status_code == 409
@@ -424,14 +437,20 @@ async def test_reading_actual_hmac_preview_grants_progress_completion_and_module
                     json={"content_version": 1},
                     headers={"Idempotency-Key": "done"},
                 )
-                assert replay.json() == completed.json()
-                assert replay.headers["cache-control"] == "no-store"
+                assert replay.status_code == 403
                 conflict = await public.post(
                     prefix + "/complete",
                     json={"content_version": 2},
                     headers={"Idempotency-Key": "done"},
                 )
-                assert conflict.status_code == 409
+                assert conflict.status_code == 403
+                for action in (
+                    repository.replay_completion(user, reading, "done", 1),
+                    repository.complete(user, reading, "done", 1, {"third": 30}, datetime.now(UTC)),
+                ):
+                    with pytest.raises(AppError) as blocked_replay:
+                        await action
+                    assert blocked_replay.value.status_code == 403
                 async with sessions() as session:
                     events = (
                         (

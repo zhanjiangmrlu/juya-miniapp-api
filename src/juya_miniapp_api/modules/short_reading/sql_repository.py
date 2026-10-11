@@ -26,7 +26,7 @@ from juya_miniapp_api.modules.short_reading.repository import (
 )
 from juya_miniapp_api.shared.errors import AppError
 
-ReadingGuard = Callable[[AsyncSession, str, str, int], Awaitable[None]]
+ReadingGuard = Callable[[AsyncSession, str, str, int | None], Awaitable[None]]
 _ENDPOINT = "v15:reading:complete"
 
 
@@ -110,6 +110,7 @@ class SQLAlchemyReadingRepository:
     ) -> ReadingCompletion | None:
         async with self.sessions() as session, session.begin():
             internal_user = await lock_active_user(session, user_id)
+            await self.guard(session, user_id, content_id, None)
             return await self._replay(session, internal_user, content_id, key, version)
 
     async def complete(
@@ -123,6 +124,8 @@ class SQLAlchemyReadingRepository:
     ) -> ReadingCompletion:
         async with self.sessions() as session, session.begin():
             internal_user = await lock_active_user(session, user_id)
+            # Even a saved receipt requires current access while these locks are held.
+            await self.guard(session, user_id, content_id, None)
             replay = await self._replay(session, internal_user, content_id, key, version)
             if replay:
                 return replay

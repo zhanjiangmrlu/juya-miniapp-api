@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Protocol
 
@@ -100,11 +101,18 @@ class ReadingRepository(Protocol):
 
 
 class InMemoryReadingRepository:
-    def __init__(self) -> None:
+    def __init__(
+        self, guard: Callable[[str, str, int | None], Awaitable[None]] | None = None
+    ) -> None:
         self.rows: dict[tuple[str, str], ReadingProgress] = {}
         self.operations: dict[tuple[str, str], tuple[str, ReadingCompletion]] = {}
         self.completion_events: list[tuple[str, str]] = []
         self._lock = asyncio.Lock()
+        self.guard = guard
+
+    async def _check(self, user_id: str, content_id: str, version: int | None) -> None:
+        if self.guard is not None:
+            await self.guard(user_id, content_id, version)
 
     async def get(self, user_id: str, content_id: str) -> ReadingProgress | None:
         return self.rows.get((user_id, content_id))
@@ -118,6 +126,7 @@ class InMemoryReadingRepository:
         now: datetime,
     ) -> ReadingProgress:
         async with self._lock:
+            await self._check(user_id, content_id, version)
             old = self.rows.get((user_id, content_id))
             position = preserved_position(old, version, paragraphs)
             row = next_progress(content_id, old, position, now)
@@ -132,6 +141,7 @@ class InMemoryReadingRepository:
         now: datetime,
     ) -> ReadingProgress:
         async with self._lock:
+            await self._check(user_id, content_id, position.content_version)
             old = self.rows.get((user_id, content_id))
             if (
                 old
@@ -150,6 +160,13 @@ class InMemoryReadingRepository:
         key: str,
         version: int,
     ) -> ReadingCompletion | None:
+        async with self._lock:
+            await self._check(user_id, content_id, None)
+            return self._replay(user_id, content_id, key, version)
+
+    def _replay(
+        self, user_id: str, content_id: str, key: str, version: int
+    ) -> ReadingCompletion | None:
         record = self.operations.get((user_id, completion_key(content_id, key)))
         if record is None:
             return None
@@ -167,9 +184,11 @@ class InMemoryReadingRepository:
         now: datetime,
     ) -> ReadingCompletion:
         async with self._lock:
-            replay = await self.replay_completion(user_id, content_id, key, version)
+            await self._check(user_id, content_id, None)
+            replay = self._replay(user_id, content_id, key, version)
             if replay:
                 return replay
+            await self._check(user_id, content_id, version)
             old = self.rows.get((user_id, content_id))
             created = old is None or old.completed_at is None
             position = preserved_position(old, version, paragraphs)

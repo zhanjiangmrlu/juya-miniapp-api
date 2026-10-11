@@ -54,10 +54,11 @@ class ShortReadingService:
         now: datetime,
     ) -> ReadingCompletion:
         SnapshotService._key(key)
+        # Access belongs to the current publication; a prior command's version is metadata.
+        detail = await self._authorized(user_id, content_id)
         replay = await self.repository.replay_completion(user_id, content_id, key, version)
         if replay:
             return replay
-        detail = await self._authorized(user_id, content_id)
         self._position(detail, ReadingPosition(content_version=version))
         return await self.repository.complete(
             user_id,

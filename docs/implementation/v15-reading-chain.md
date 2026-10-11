@@ -4,7 +4,7 @@
 
 测试使用本次调用创建的 UUID 私有 MySQL 8.4、Redis 7 容器和 admin-api 当前实际迁移；完成后由隔离脚本删除自己的容器。没有修改 `.env`、重启共享服务、连接正式数据库或调用收费生成任务。
 
-2026-10-11 最终结果：`1 passed in 1.58s`；该测试文件 Ruff check、format check 和 diff whitespace 检查通过。
+2026-10-11 最新联调结果：本链路与 `test_v15_reading_sql.py` 联合执行，`3 passed in 1.82s`；相关测试 Ruff check、format check 和 diff whitespace 检查通过。
 
 ## 验证路径
 
@@ -15,8 +15,8 @@ public short-reading router → ShortReadingService / V15ReadingAuthority → Ad
 - 全篇音频委托使用 WHOLE 角色及已发布版本中的固定 resource_version；历史 revision 请求为 409。资源签名器是外部测试端口，返回 `media.invalid`，验证委托权限及引用归属，不验证 OSS。
 - progress 保存实际段落 ID 与客户端序号；较小序号不能覆盖已接受位置。首次读完仅创建一次完成时间和 SHORT_READING_COMPLETED 事件。
 - 发布指针改为第二版后 open 重置旧段落位置和序号，保留 completed_at；旧 content_version 的 progress 被拒绝。
-- 关闭模块后 preview、open、progress、新 complete、全篇资源均被拒绝。直接仓储写入也由真实事务 guard 拒绝，覆盖先成功读取后权限关闭的边界。
-- 已提交 complete 的同键同版本只重放进度元数据；同键改版本为 409；成功响应均设置 no-store。
+- 关闭模块后 preview、open、progress、complete（包括旧成功收据）、全篇资源均被拒绝。直接仓储 open/save/complete 及成功收据重放也由真实事务 guard 拒绝，覆盖先成功读取后权限关闭的边界。
+- 已提交 complete 在当前仍有权限时，同键同原请求版本只重放进度元数据；发布版更新仍可合法重放原收据，同键改请求版本为 409。权益过期后旧收据为 403；成功响应均设置 no-store。
 - 每个稳定短文首次 SHORT_READING_STARTED / COMPLETED 各一条；无 learning_completion_event、daily_checkin、user_contact 写入。
 
 ## 验收边界
