@@ -1,0 +1,7 @@
+# 历史收藏资源释放事件兼容
+
+旧快照保存的`content_type=SCENE`保持原样；管理内部资源事件仅接受`dialogue/word_card/short_reading`，原取消事件直接发送SCENE被实际HMAC端点422拒绝。BFF现在仅在事件和本地资源引用投影中使用与actual SQLFavoriteAuthority相同的SCENE→dialogue映射，保持固定修订、图、目标、音频版本、sequence及active事实不变；upsert同步当前类型和内容ID。
+
+actual FavoriteBackfill仅写snapshot/revision/legacy_map，不创建资源引用、投影或outbox。历史已知图/目标/版本但发布修订未知时仍保存这些原始已知字段；它们缺少可授权的固定发布绑定，取消不能补造修订，也不发送管理端无法接受的null修订资源事件。正常取消/清理仍使收藏失效；保存字段不被当前词库或音频替换。
+
+序列化行为先RED→GREEN；独立只读复核无新增确证P1/P2。`17a6552`的实际SQL/HMAC消费者回归已通过：known取消事件DELIVERED且管理投影inactive；partial无修订取消后失效、保留已知原字段且reference/projection/outbox均0。详见v15-historical-media-regression.md及最终v15-progress.md。外部OSS及生产资源清理独立待验收。

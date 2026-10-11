@@ -6,6 +6,7 @@ from urllib.parse import quote
 from pydantic import Field
 
 from juya_miniapp_api.integrations.admin_api.client import AdminApiClient, _validate
+from juya_miniapp_api.integrations.admin_api.schemas import LearningFeatures
 from juya_miniapp_api.integrations.admin_api.v15_content import (
     ConfirmedEntry,
     SceneDetail,
@@ -48,6 +49,12 @@ def segment(value: str) -> str:
 
 
 class AdminV15Client(AdminApiClient):
+    async def learning_features(self) -> LearningFeatures:
+        return _validate(
+            LearningFeatures,
+            await self._request_json("POST", "/internal/v1/learning-features", {}),
+        )
+
     async def content(self, user_id: str, kind: ContentType, identity: str) -> dict[str, Any]:
         return await self._request_json(
             "POST", f"/internal/v1/content/{kind}/{segment(identity)}/open", {"user_id": user_id}
@@ -64,6 +71,13 @@ class AdminV15Client(AdminApiClient):
     async def preview(self, user_id: str, kind: ContentType, identity: str) -> dict[str, Any]:
         return await self._request_json(
             "POST", f"/internal/v1/content/{kind}/{segment(identity)}/preview", {"user_id": user_id}
+        )
+
+    async def preview_cover(self, user_id: str, kind: ContentType, identity: str) -> dict[str, Any]:
+        return await self._request_json(
+            "POST",
+            f"/internal/v1/content/{kind}/{segment(identity)}/preview-cover/signed-url",
+            {"user_id": user_id},
         )
 
     async def confirm_snapshot(self, user_id: str, ref: SnapshotReference) -> ConfirmedSnapshot:

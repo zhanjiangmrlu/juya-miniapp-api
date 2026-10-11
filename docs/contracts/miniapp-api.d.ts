@@ -1537,6 +1537,11 @@ export interface components {
              * @default false
              */
             authorization_pending: boolean;
+            /**
+             * Profile Completion Enabled
+             * @default false
+             */
+            profile_completion_enabled: boolean;
         };
         /** LogoutRequest */
         LogoutRequest: {
@@ -1705,6 +1710,11 @@ export interface components {
             /** Content Version */
             content_version: number;
             content: components["schemas"]["SceneContent"];
+            /**
+             * Recording Enabled
+             * @default false
+             */
+            recording_enabled: boolean;
         };
         /** PublishedSentence */
         PublishedSentence: {

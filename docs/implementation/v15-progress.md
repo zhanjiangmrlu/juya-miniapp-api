@@ -3,7 +3,7 @@
 - 分支：feature/v1.5-20261011；起始 HEAD：d3fadeba6c6d00c7d55caefde31d63cc18b3f551。
 - 独占仓库：juya-miniapp-api。共享迁移、服务重启及根目录文档由协调对话处理。
 - 依据：20261011 完整需求、技术方案 00/02/05/06/07/08；执行 executing-plans，保留既有身份、联系方式和反馈编排。
-- 当前阶段：根据用户剩余全部完成授权，继续完整需求审计与收尾；已冻结五项联调修复，接下来消费真实录音开关、短文排序、历史已知媒体，并交付可复用隔离Socket/JWT入口。根目录文档和最终跨服务联调由协调对话负责。
+- 当前阶段：本仓新增代码和公开契约本轮收尾完成，录音新旧版、资料入口配置、安全封面、排序/历史、固定收藏媒体及可靠释放事件已通过完整隔离门禁；冻结JSON/TS供消费者同步。根接口文档、前端固定fixture及最终真实页面联调由协调对话负责。
 
 ## 任务
 
@@ -19,7 +19,7 @@
 - 当前分层证据见下文；不把 Mock、InMemory 或 SQL 假 guard 视为真实授权链路通过。
 - 禁止创建迁移链、跨仓库修改、清主站库、改 .env、推送或部署。
 - 外部待验收：真实版权、供应商账户/预算、人工听音、OSS CORS/Range、微信设备及生产。
-- 状态：REMAINING_SCOPE_AUDIT_IN_PROGRESS；五项修复已冻结，完整收尾审计进行中。此前本地门禁保留为对应提交历史证据，不宣称新增范围已经通过。
+- 状态：READY_FOR_COORDINATED_ACCEPTANCE_LOCAL_ONLY；本仓本轮代码/契约门禁完成，待协调消费新冻结基线与最终页面/外部验收。此前门禁保留为对应提交历史证据，以本文末尾最新记录为准。
 
 ## P0/P1 领域阶段
 
@@ -83,14 +83,14 @@
 | 项目 | 当前结论 | 证据/责任 |
 | --- | --- | --- |
 | /me avatar_url | `c6b7887`已实现并装配，完整门禁通过 | 仅本人已确认avatars/私有键的受控短签名，空/未配置返回null，public DTO实际声明；SDK本地签名及私有SQL验证，不代表OSS可访问 |
-| /me/profile POST/PUT兼容 | `c6b7887`已新增真实POST，保留PATCH，完整门禁通过 | 相同验证、头像确认、用户写入；真实JWT/Socket POST保存后GET读取通过 |
-| 录音审核开关 | 管理后端依赖；当前不发布编造recording_enabled | admin/BFF schema2 SceneDetail与Settings均无字段；通用system_config没有该key/默认/读取端口。需求2.4/7.6要求独立审核降级开关，需上游明确持久配置与内部DTO |
+| /me/profile POST/PATCH兼容 | `c6b7887`已新增真实POST，保留PATCH，完整门禁通过 | 相同验证、头像确认、用户写入；真实JWT/Socket POST保存后GET读取通过 |
+| 录音审核开关 | schema2及schema1均已接入，最新完整门禁通过 | actual learning_features_v15配置及HMAC读取端口已交付，严格布尔消费；缺失/坏配置/端点不可用关闭录音且保留已授权旧正文，preview不暴露开关 |
 | RUNNING/RECOVER发音 | 已RED→GREEN，完整门禁通过 | actual admin pronunciation.repository.claim/tasks写RUNNING/RECOVER，public_task原样返回；真实HMAC/SQL任务轮询映射PREPARING，仍无收费重试、非READY无URL |
 | user_stage | 权威事实投影已装配，完整门禁通过 | 需求6.1/31.4；本人有效正式/限时权益或已开始非开放内容为ENTITLED，其余NEW；仅呈现不授予访问；授权待定时null。6项单元、`4664e30`18项真实SQL及JWT/Socket目录通过 |
-| 短文运营排序 | 管理后端依赖；保留actual internal public_id排序 | short_reading无全局sort字段/命令；updated_at不是运营排序，package_item.position仅包内、多包不能猜全局。详见v15-reading-followup.md |
+| 短文运营排序 | actual admin0018 sort_order已在a9a97b8接入，完整门禁通过 | (sort_order,public_id)排序；游标绑定本人和实际发布排序摘要，重排/发布变化422；读完、权益与历史均不作为运营顺序替代 |
 | 完成重放核权 | `86080ac`及实际guard装配已完成，完整门禁通过 | service先核当前全文权限；SQL account锁下guard(None)核当前模块/发布/权益/到期，仍授权版更同key旧metadata可回放；new写入guard(int)必须当前版 |
 
-状态最终以本轮新完整门禁及新OpenAPI/TS提交为准；录音/全局排序没有产出前，不宣称前端七项缺口均已闭合。
+此表按最新消费者产出更新；下方旧门禁为对应历史提交证据。前端实际消费与最终页面验收由协调对话核对，不能仅凭字段产出宣称已完成。
 
 ## 联调跟进最终本地门禁（2026-10-11）
 
@@ -129,6 +129,8 @@ Ruling: 沿用用户指定feature分支和本进度ledger，必要独立子任�
 
 ### 新发现管理后端契约依赖（需协调跟进）
 
+本段为中间阶段确证的四项依赖；后续管理端已交付且消费者接入/回归已完成，最新结论见末尾统一门禁，不继续列为未开发事项。
+
 1. **短文安全封面**：actual preview返回cover_asset_id，但BFF ReadingPreview仅供cover_url，当前始终null；正文资源只允许whole_audio。admin v15_access.content_resource/SQLResourceSigner.binding当前一律full_access，不能用这一端点签无权PREVIEW卡封面。需要admin实际交付仅visible+当前发布COVER绑定/媒体审核的签名契约（或preview返回受控cover_url），随后BFF接入；不能通过本地拼OSS公开地址绕过授权。需求30.5/02方案§8。
 2. **保存旧音频版本**：admin pronunciation/service.resolve直接选当前target.uploaded_resource_version，忽略已保存context.resource_version。同target收藏v1后后台换v2会被最终saved.version护栏拒绝403；BFF正确拒绝错版但历史known合法播放性缺失。需admin FAVORITE_REVIEW按已保存固定版本解析，未知历史不造版本。
 3. **历史known媒体类型**：admin回填仍存SCENE/VOCABULARY/PHRASE；BFF查询已明确映射词/语块，但admin SQLFavoriteAuthority直接透传旧entry_type，favorite_resource及SQLResourceSigner只识别word的图角色。known图经本人收藏资源委托仍会拒绝；需admin在历史权威读端规范实际类型，不能让BFF重新猜存档语义。
@@ -143,3 +145,30 @@ Ruling: 沿用用户指定feature分支和本进度ledger，必要独立子任�
 - 本轮录音schema2字段、短文运营排序、本人阅读历史、收藏词汇图运行时及64 paths/73 operations的JSON/TS一同作中间提交，消费者可立即接入。SHA见v15-contract-handoff.md。
 - 独立评审另确证schema1旧场景录音开关未透传；actual POST /internal/v1/learning-features已有装配，本仓随后补已授权旧场景的权威外层字段，前端旧adapter也需透传。此中间提交不宣称此项已完成。
 - 协调侧运行9dee3a7a3b3d4fc7bd8f48a56b1df80e记录PREFLIGHT_PASSED，私有资源已清理；该跨项目预检由协调侧执行，不代替最终页面验收。
+
+### 中间提交之后的能力收口
+
+- `c9e2f14`接入actual安全preview-cover端点，仅签当前发布COVER；BFF严格核对target/asset/role、HTTPS、60秒有效期，签名前后重新核对preview发布版本与封面，返回前再次核权及检查过期。独立封面单元28项及只读评审通过，独立SQLResourceSigner/HMAC/Redis回归纳入本轮统一门禁。
+- `17a6552`实际历史媒体链通过：同target当前上传变v2后收藏仍使用已保存v1；actual回填SCENE/VOCABULARY保留旧标签且取图/发音委托规范角色；未知版本不拼当前资源；取消及陌生用户拒绝。
+- 主集成新增legacy取消事件映射修复，存档不变，仅内部事件及引用投影SCENE→dialogue；完整known释放事件实际DELIVERED且管理投影inactive。缺失历史发布修订时保留已知图/目标/版本而不编造绑定或发送非法null修订事件，取消失效且资源引用/投影/outbox均0。
+- schema1已授权正文外层录音布尔字段读取实际HMAC配置；true/false/missing/malformed、同键重开和no-store真实Socket通过。可选配置404/403/503只关闭录音，不影响成功授权的正文；preview不读开关。前端旧adapter须消费外层同名字段。
+- 协调和前端已确认独立history区满足失权/下线进度保留，不要求重复progress_summary；本仓不增加该冗余字段，列表/预览已读徽标不能用本地猜测代替。
+- 新确证代码依赖：需求6.3无权提示可配置次级资料入口`profile_completion_enabled`。截至本段记录actual管理端仍无持久配置及内部投影，当前正式LearningCatalog无字段；协调已要求管理端交付后再接入，不把contact_prompt_eligible代替配置，也不把此项归为外部验收。
+
+### 资料入口权威配置已接入
+
+管理端随后实际扩展learning_features_v15及HMAC读取响应，提供profile_completion_enabled严格布尔，缺失/坏配置false，与录音独立。BFF严格内部DTO允许该字段且旧上游缺失默认false；正式LearningCatalog显式boolean/defaultfalse，CatalogService每次读取实际权威配置，配置403/404/503不阻断正常目录但关闭可选入口，授权待定亦关闭。没有从联系方式、Mock或本地Settings推导开启。
+
+消费者回归先6 failed/1 passed（缺端口/字段和严格DTO拒绝）→7 passed；与旧录音21项单元通过。真实legacy Socket用例同时校验本人GETcatalog的true/false/missing/malformed及no-store；独立只读评审27项通过，无新增确证P1/P2。最终新完整门禁随后记录。
+
+## 本轮最终统一门禁与冻结（2026-10-11）
+
+- `uv run ruff check src tests scripts`全部通过；`uv run ruff format --check src tests scripts`227文件格式通过；`uv run mypy src`131源文件无错误。
+- `uv run pytest -q --tb=short`：339 passed/40 skipped，4.62s；这些无私有环境skip不作为SQL验收证据。
+- `uv run python scripts/test-v15-isolated.py -q --tb=short --show-capture=no --cov=juya_miniapp_api --cov-report=term:skip-covered --cov-fail-under=80`：378 passed/1 skipped，覆盖83.38%，46.41s。唯一skip为外部OSS授权环境验收；此前371项/83.36%为资料入口配置接入前历史门禁。
+- 实际admin0018迁移、UUID私有MySQL/Redis、两个生产uvicorn、合法JWT及真实SQL session、HMAC/nonce、事务授权和OutboxDispatcher投递均覆盖；新增实际SQLResourceSigner安全封面COVER签发，仅其外部OSS HEAD/sign为明确测试端口，不代表云访问。
+- 历史固定资源v1、旧类型规范化、同源音频别名、未知版本拒绝、取消/他人拒绝、known释放事件DELIVERED、partial无修订原字段保留且无非法事件，均在实际SQL/HMAC链中通过。
+- 新版及旧版录音与资料入口配置true/false/missing/malformed已实际Socket验证，所有受控打开/目录返回private,no-store；配置读取不可用仅关闭可选能力，不绕过或阻断已成功的内容授权。
+- OpenAPI按实际配置完整运行时重新生成64 paths/73 operations，TS由openapi-typescript@7.10.1生成；最终绝对路径与SHA见v15-contract-handoff.md，必须替换a9a97b8前端固定fixture和根接口文档旧基线。
+- 独立只读评审在旧录音降级、profile配置、安全封面及历史释放修正后无新增确证P1/P2；没有跨仓库编辑、共享迁移/重启、.env修改、push或部署。
+- 本仓本轮代码缺口已闭合，可由协调消费；最终四项目真实页面、微信身份/设备、版权/人工听音、云预算/OSS CORS与Range、生产分别待对应验收，不能由这些本地门禁替代。

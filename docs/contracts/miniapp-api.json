@@ -5798,6 +5798,11 @@
             "type": "boolean",
             "title": "Authorization Pending",
             "default": false
+          },
+          "profile_completion_enabled": {
+            "type": "boolean",
+            "title": "Profile Completion Enabled",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -6415,6 +6420,11 @@
           },
           "content": {
             "$ref": "#/components/schemas/SceneContent"
+          },
+          "recording_enabled": {
+            "type": "boolean",
+            "title": "Recording Enabled",
+            "default": false
           }
         },
         "additionalProperties": false,

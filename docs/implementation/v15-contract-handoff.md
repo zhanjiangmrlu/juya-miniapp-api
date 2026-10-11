@@ -2,7 +2,7 @@
 
 2026-10-11 第一冻结基线：`19f28ef`（进度记录提交 `6c86134`）。实际配置完整运行时包含62条path、71个operation。
 
-| 文件 | 绝对路径 | 当前文件 SHA-256 |
+| 文件 | 绝对路径 | 第一冻结基线 SHA-256 |
 | --- | --- | --- |
 | OpenAPI JSON | `D:/个人/juya/juya-miniapp-api/docs/contracts/miniapp-api.json` | `9f82dfb2a6de87d003274571bc373030c17d7cf68dc914f78f5e60efc25dd20d` |
 | 自动生成 TypeScript | `D:/个人/juya/juya-miniapp-api/docs/contracts/miniapp-api.d.ts` | `1c97cd5d645e882abc4edbd15ce01194f6c14c80dcc0c44beb2de5f9e976bc9f` |
@@ -41,3 +41,18 @@
 | `docs/contracts/miniapp-api.d.ts` | `f117462c9c2f9544a4b39d6cf78a75f9467c150f58173168b7e4cbae98938e16` |
 
 待上游交付的具体代码能力：安全预览封面、收藏旧固定音频优先解析、历史媒体类型规范化和同源音频别名回填；详见v15-progress.md。不用测试签名器或当前媒体替代这些缺口。
+
+## 第三轮契约（旧版录音、资料入口与安全媒体）
+
+实际配置完整运行时仍为64 paths/73 operations，新增`PublishedScene.recording_enabled: boolean`，默认false；已授权schema1外层每次读取当前实际审核配置。前端`scene-response`旧版适配须将该外层值严格透传，不能读取不可变content快照中的臆造字段。
+
+新增`LearningCatalog.profile_completion_enabled: boolean`，默认false；实际管理端现已交付同一个`learning_features_v15`中的独立严格布尔配置及HMAC读取端点。目录每次投影当前值；缺失/坏配置/读取失败/鉴权等待关闭该可选入口，同时正常授权目录继续返回。前端需同步正式类型并严格布尔消费，不使用contact_prompt_eligible替代。
+
+短文既有`cover_url`现在从真实预览封面委托端点取得，经当前发布、资源绑定、授权及有效期重核；不是拼接的公开对象地址。历史固定媒体和释放事件已完成消费者回归，保存旧事实与未知标记不变。独立history已覆盖安全历史/计数，按协调及前端最新收口不增加重复progress_summary字段。
+
+| 文件 | SHA-256 |
+| --- | --- |
+| `D:/个人/juya/juya-miniapp-api/docs/contracts/miniapp-api.json` | `c0129e89e0ea3e496df0723d98f7bafc02c2f2c1a06816ad4b16d7b11dfb7b12` |
+| `D:/个人/juya/juya-miniapp-api/docs/contracts/miniapp-api.d.ts` | `0c2824feec6b89e6f3470572dcb16cb30bebcdcf860e86430e082eff3da255fc` |
+
+本轮提交及统一门禁结果见v15-progress.md。本仓新契约必须取代前端a9a97b8固定fixture；根生成器以本轮最终提交`--ref HEAD`同步同一路径。最终页面、设备/云端/人工/生产仍由对应验收处理。

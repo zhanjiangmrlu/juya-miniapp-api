@@ -70,6 +70,7 @@ def create_content_access_router(
     @router.post("/scenes/{scene_id}/open", response_model=SceneOpenResult)
     async def open_scene(
         scene_id: str,
+        response: Response,
         user_id: Annotated[str, Depends(user_dependency)],
         idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
     ) -> dict[str, object]:
@@ -79,6 +80,7 @@ def create_content_access_router(
         #     user_id: 当前操作所属用户的公开标识
         #     idempotency_key: 本次业务命令的幂等键,重复调用复用原操作
         # 返回:场景访问级别、权限信息与固定发布版本内容
+        response.headers["Cache-Control"] = "private, no-store"
         result = await access.open_scene(user_id, scene_id, idempotency_key, clock())
         return result.model_dump(mode="json")
 

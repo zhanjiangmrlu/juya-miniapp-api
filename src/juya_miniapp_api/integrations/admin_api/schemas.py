@@ -22,6 +22,7 @@ class LearningCatalog(BaseModel):
     items: list[dict[str, Any]] = Field(default_factory=list)
     user_stage: Literal["NEW", "ENTITLED"] | None = None
     authorization_pending: bool = False
+    profile_completion_enabled: bool = Field(default=False, strict=True)
 
 
 class AccessProjection(BaseModel):
@@ -40,6 +41,15 @@ class PublishedScene(BaseModel):
     revision_id: str
     content_version: int = Field(ge=1)
     content: SceneContent
+    recording_enabled: bool = Field(default=False, strict=True)
+
+
+class LearningFeatures(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    recording_enabled: bool
+    profile_completion_enabled: bool = False
+    version: int = Field(ge=0)
 
 
 class PreviewScene(BaseModel):

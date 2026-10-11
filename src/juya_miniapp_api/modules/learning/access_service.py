@@ -1,8 +1,10 @@
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from juya_miniapp_api.integrations.admin_api.client import AdminApiUnavailable
 from juya_miniapp_api.integrations.admin_api.schemas import (
+    LearningFeatures,
     PublishedScene,
     SceneEntry,
     SceneOpenResult,
@@ -78,6 +80,10 @@ class SceneAccessClient(Protocol):
         #     revision_id: 需要访问或固定的场景发布修订标识
         # 返回:固定场景发布版本的资源签名链接
         ...
+
+
+class LearningFeaturesReader(Protocol):
+    async def learning_features(self) -> LearningFeatures: ...
 
 
 class OpenHistory(Protocol):
@@ -177,6 +183,7 @@ class AccessService:
         history: OpenHistory,
         v15: V15SceneAuthority | None = None,
         favorites: FavoriteStates | None = None,
+        features: LearningFeaturesReader | None = None,
     ) -> None:
         # 功能:初始化已发布场景和媒体访问授权服务并保存所需依赖与配置
         # 参数:
@@ -188,6 +195,7 @@ class AccessService:
         self._history = history
         self._v15 = v15
         self._favorites = favorites
+        self._features = features
 
     async def open_scene(
         self,
@@ -230,6 +238,15 @@ class AccessService:
                 if self._favorites is not None:
                     detail = await attach_favorite_states(user_id, detail, self._favorites)
                 result = result.model_copy(update={"scene": detail})
+            elif isinstance(result.scene, PublishedScene):
+                enabled = False
+                if self._features is not None:
+                    # Configuration failure closes recording without losing authorized reading.
+                    with suppress(AppError):
+                        enabled = (await self._features.learning_features()).recording_enabled
+                result = result.model_copy(
+                    update={"scene": result.scene.model_copy(update={"recording_enabled": enabled})}
+                )
             await self._history.record_open(user_id, scene_id, now)
         return result
 

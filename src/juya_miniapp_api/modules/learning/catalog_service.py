@@ -1,4 +1,5 @@
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -8,9 +9,15 @@ from juya_miniapp_api.integrations.admin_api.schemas import (
     AccessProjection,
     EntitlementProjection,
     LearningCatalog,
+    LearningFeatures,
     LearningModule,
 )
 from juya_miniapp_api.modules.learning.stage import LearningStageReader
+from juya_miniapp_api.shared.errors import AppError
+
+
+class CatalogFeaturesReader(Protocol):
+    async def learning_features(self) -> LearningFeatures: ...
 
 
 class CatalogClient(Protocol):
@@ -60,6 +67,7 @@ class CatalogService:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         *,
         stage_reader: LearningStageReader | None = None,
+        features: CatalogFeaturesReader | None = None,
     ) -> None:
         # 功能:初始化学习目录与授权缓存服务并保存所需依赖与配置
         # 参数:
@@ -72,6 +80,7 @@ class CatalogService:
         self._cache = cache
         self._clock = clock
         self._stage_reader = stage_reader
+        self._features = features
 
     async def modules(self) -> list[LearningModule]:
         # 功能:返回可用学习模块列表
@@ -88,6 +97,11 @@ class CatalogService:
         # entitlement version. Always request the current authoritative projection.
         try:
             result = await self._client.get_catalog(user_id, summary)
+            enabled = False
+            if not result.authorization_pending and self._features is not None:
+                with suppress(AppError):
+                    enabled = (await self._features.learning_features()).profile_completion_enabled
+            result = result.model_copy(update={"profile_completion_enabled": enabled})
             if not result.authorization_pending and self._stage_reader is not None:
                 facts = await self._stage_reader.get(user_id, self._clock())
                 return result.model_copy(update={"user_stage": facts.stage})

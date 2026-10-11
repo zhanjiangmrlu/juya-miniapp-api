@@ -221,7 +221,9 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
     contact_service = ContactService(SQLAlchemyContactRepository(sessions), field_cipher)
     learning_repository = SQLAlchemyLearningRepository(sessions)
     learning_overviews = SQLAlchemyLearningOverviewRepository(sessions)
-    catalog_service = CatalogService(admin, cache, stage_reader=SQLLearningStageReader(sessions))
+    catalog_service = CatalogService(
+        admin, cache, stage_reader=SQLLearningStageReader(sessions), features=admin
+    )
     learning_service = LearningService(learning_repository, catalog_service)
     facts_guard = FinalFactsGuard(
         _required(settings.internal_hmac_secret, "internal_hmac_secret").encode()
@@ -237,7 +239,11 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         SnapshotReviewAdapter(snapshots), CurrentContentAdapter(scene_authority), admin
     )
     access_service = AccessService(
-        admin, SQLAlchemyOpenHistory(learning_repository), scene_authority, snapshot_repository
+        admin,
+        SQLAlchemyOpenHistory(learning_repository),
+        scene_authority,
+        snapshot_repository,
+        features=admin,
     )
     favorite_repository = SQLAlchemyFavoriteRepository(sessions)
     favorite_service = FavoriteService(favorite_repository, access_service)

@@ -635,8 +635,13 @@ class SQLAlchemySnapshotRepository:
     async def _reference(
         session: AsyncSession, row: FavoriteSnapshot, revision_id: str, now: datetime
     ) -> None:
+        if row.data.revision_id is None:
+            # Legacy backfill preserves partial known fields but creates no held
+            # resource projection without a published revision. Do not invent one
+            # or send an invalid null-revision release event on cancellation.
+            return
         if (
-            (row.data.revision_id is None or row.data.legacy_incomplete)
+            row.data.legacy_incomplete
             and row.data.image_asset_id is None
             and row.data.pronunciation is None
         ):
@@ -659,7 +664,9 @@ class SQLAlchemySnapshotRepository:
             "favorite_id": row.favorite_id,
             "snapshot_revision_id": revision_id,
             "active": row.active,
-            "content_type": ref.content_type,
+            # The saved legacy tag stays immutable; internal resource events use
+            # the same canonical alias as admin SQLFavoriteAuthority.
+            "content_type": "dialogue" if ref.content_type == "SCENE" else ref.content_type,
             "content_id": ref.content_id,
             "revision_id": row.data.revision_id,
             "image_asset_id": row.data.image_asset_id,
@@ -674,7 +681,9 @@ class SQLAlchemySnapshotRepository:
                 "active,event_id,sequence,updated_at) VALUES(:favorite_id,:snapshot_revision_id,"
                 ":content_type,:content_id,:revision_id,:image_asset_id,:pronunciation_target_id,"
                 ":resource_version,:active,:event_id,:sequence,:now) ON DUPLICATE KEY UPDATE "
-                "snapshot_revision_id=VALUES(snapshot_revision_id),revision_id=VALUES(revision_id),"
+                "snapshot_revision_id=VALUES(snapshot_revision_id),"
+                "content_type=VALUES(content_type),content_id=VALUES(content_id),"
+                "revision_id=VALUES(revision_id),"
                 "image_asset_id=VALUES(image_asset_id),"
                 "pronunciation_target_id=VALUES(pronunciation_target_id),"
                 "resource_version=VALUES(resource_version),"
