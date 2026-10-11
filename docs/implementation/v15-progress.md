@@ -73,3 +73,5 @@
 - 管理SQLAuthorizer与本地最终事实投影AST同版一致；实际管理build_v15_services凭据密钥与BFF一致。OpenAPI按配置完整运行时生成；TypeScript以openapi-typescript@7.10.1自动生成，未手改。
 - 隔离运行器改为TCP readiness，避免误把MySQL初始化临时socket服务当最终服务；只清理本次UUID容器。共享服务没有重启。
 - 收尾提交由本对话执行中文Conventional Commit；未推送、部署、切分支或修改其他仓库。READY仅表示本仓库可被协调对话集成，不代表历史已知媒体上游回填、收费预算、人工听音、版权、OSS/微信真机/生产已经验收。
+
+- 收尾代码提交：bb7a179 feat(v1.5): 装配真实授权闭环与旧收藏安全兼容；本次包含运行时、旧兼容、清理投递、同版状态、固定资源版本、OpenAPI/TypeScript和完整回归。提交后工作区干净。
