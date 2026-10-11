@@ -98,7 +98,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
+        /** Update Profile */
+        post: operations["update_profile_api_v1_me_profile_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1477,10 +1478,50 @@ export interface components {
             /** Related Id */
             related_id?: string | null;
         };
+        /** LearningCatalog */
+        LearningCatalog: {
+            /** Items */
+            items?: {
+                [key: string]: unknown;
+            }[];
+            /** User Stage */
+            user_stage?: ("NEW" | "ENTITLED") | null;
+            /**
+             * Authorization Pending
+             * @default false
+             */
+            authorization_pending: boolean;
+        };
         /** LogoutRequest */
         LogoutRequest: {
             /** Session Id */
             session_id: string;
+        };
+        /** MeResponse */
+        MeResponse: {
+            /** Public Id */
+            public_id: string;
+            /** Juya Number */
+            juya_number: string;
+            /** Status */
+            status: string;
+            /** Nickname */
+            nickname: string | null;
+            /** Avatar Object Key */
+            avatar_object_key: string | null;
+            /** Avatar Url */
+            avatar_url: string | null;
+            /** Created At */
+            created_at: string | null;
+            /** Last Active At */
+            last_active_at: string | null;
+            contact: components["schemas"]["ProfileContactResponse"] | null;
+            /** Contact Prompt Eligible */
+            contact_prompt_eligible: boolean;
+            /** Deletion */
+            deletion: {
+                [key: string]: unknown;
+            } | null;
         };
         /** Paragraph */
         Paragraph: {
@@ -1517,6 +1558,36 @@ export interface components {
              * @constant
              */
             preview_status: "PREVIEW";
+        };
+        /** ProfileContactResponse */
+        ProfileContactResponse: {
+            /** Wechat Id */
+            wechat_id: string | null;
+            /** Self Edit Count */
+            self_edit_count: number;
+            /** Change Pending */
+            change_pending: boolean;
+            /** Contact Status */
+            contact_status: string;
+            /** Can Self Edit */
+            can_self_edit: boolean;
+            /** Requires Correction */
+            requires_correction: boolean;
+            /** Consent Version */
+            consent_version: string | null;
+            /** Consented At */
+            consented_at: string | null;
+            /** Withdrawn At */
+            withdrawn_at: string | null;
+            /** Verified At */
+            verified_at: string | null;
+            /** Verified By */
+            verified_by: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** ProfileUpdate */
         ProfileUpdate: {
@@ -2345,9 +2416,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_profile_api_v1_me_profile_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2382,9 +2486,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2816,9 +2918,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["LearningCatalog"];
                 };
             };
             /** @description Validation Error */

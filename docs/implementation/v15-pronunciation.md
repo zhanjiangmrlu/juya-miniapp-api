@@ -27,7 +27,7 @@ create_pronunciation_router(service, *, user_dependency=active_account_dependenc
 | 管理状态 | BFF 状态 | 行为 |
 | --- | --- | --- |
 | READY | READY | 要求合法 HTTP(S) 地址、非空固定资源版本及未到期的带时区 expires_at；已固定版本必须相同 |
-| PENDING / PREPARING / RETRY | PREPARING | 要求 task_id；不返回资源地址，不开放用户收费重试 |
+| PENDING / PREPARING / RETRY / RUNNING / RECOVER | PREPARING | 要求 task_id；不返回资源地址，不开放用户收费重试 |
 | FAILED | FAILED | 仅上游明确 can_retry=true 才允许重试；实际重试仍由管理预算／冷却／有限尝试控制 |
 | UNKNOWN | FAILED | can_retry=false，返回 PRONUNCIATION_RESULT_UNKNOWN（或上游明确码），避免未知收费结果再次触发收费 |
 | UNAVAILABLE | UNAVAILABLE | 无地址、不可重试 |

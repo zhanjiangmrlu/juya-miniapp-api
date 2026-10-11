@@ -227,6 +227,8 @@ async def test_ambiguous_entry_is_not_guessed_when_poll_has_no_target() -> None:
         ("PENDING", "PREPARING", False),
         ("PREPARING", "PREPARING", False),
         ("RETRY", "PREPARING", False),
+        ("RUNNING", "PREPARING", False),
+        ("RECOVER", "PREPARING", False),
         ("FAILED", "FAILED", True),
         ("UNKNOWN", "FAILED", False),
         ("UNAVAILABLE", "UNAVAILABLE", False),
@@ -240,6 +242,8 @@ async def test_internal_states_map_to_four_public_states(
     result = await service.resolve("owner", "word-target", PronunciationRequest(favorite_id=fid))
     assert result.status == expected
     assert result.can_retry is retry
+    polled = await service.poll("owner", "task", PronunciationRequest(favorite_id=fid))
+    assert polled.status == expected and polled.can_retry is retry
     if expected != "READY":
         assert result.url is None and result.expires_at is None
 

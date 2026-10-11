@@ -174,7 +174,7 @@ class FinalFactsGuard:
             raise AppError("CONFIRMATION_CREDENTIAL_INVALID", "固定资料与权威条目不一致", 409)
 
     async def reading(
-        self, session: AsyncSession, user_id: str, identity: str, version: int
+        self, session: AsyncSession, user_id: str, identity: str, version: int | None
     ) -> None:
         facts = await self.authorizer(
             session, user_id, "short_reading", identity, datetime.now(UTC), lock=True
@@ -189,7 +189,7 @@ class FinalFactsGuard:
             ),
             {"id": identity},
         )
-        if current != version:
+        if current is None or (version is not None and current != version):
             raise AppError("CONTENT_VERSION_CONFLICT", "短文已更新,请重新打开", 409)
         if facts.expires_at is not None and datetime.now(UTC) >= facts.expires_at:
             raise AppError("CONTENT_ACCESS_DENIED", "当前账号暂未开通此内容", 403)

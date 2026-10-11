@@ -65,6 +65,7 @@ from juya_miniapp_api.modules.learning.catalog_service import CatalogService
 from juya_miniapp_api.modules.learning.repository import SQLAlchemyLearningRepository
 from juya_miniapp_api.modules.learning.router import create_learning_router
 from juya_miniapp_api.modules.learning.service import LearningService
+from juya_miniapp_api.modules.learning.stage import SQLLearningStageReader
 from juya_miniapp_api.modules.learning.v15_authority import V15SceneAuthority
 from juya_miniapp_api.modules.messages.repository import SQLAlchemyMessageRepository
 from juya_miniapp_api.modules.messages.router import create_messages_router
@@ -217,7 +218,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
     contact_service = ContactService(SQLAlchemyContactRepository(sessions), field_cipher)
     learning_repository = SQLAlchemyLearningRepository(sessions)
     learning_overviews = SQLAlchemyLearningOverviewRepository(sessions)
-    catalog_service = CatalogService(admin, cache)
+    catalog_service = CatalogService(admin, cache, stage_reader=SQLLearningStageReader(sessions))
     learning_service = LearningService(learning_repository, catalog_service)
     facts_guard = FinalFactsGuard(
         _required(settings.internal_hmac_secret, "internal_hmac_secret").encode()
@@ -273,6 +274,7 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         user_repository,
         contact_service,
         avatar_verifier=avatar_store.confirm,
+        avatar_url_signer=avatar_store.sign_avatar_url,
         open_completion_count=user_repository.count_open_completions,
     )
     account_service = AccountLifecycleService(

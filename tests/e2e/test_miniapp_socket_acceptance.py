@@ -269,9 +269,21 @@ def test_normal_runtime_over_socket_closes_miniapp_user_flows(tmp_path: Path) ->
             client.headers["Authorization"] = "Bearer " + refreshed.json()["access_token"]
             me = client.get("/api/v1/me")
             assert me.status_code == 200 and not me.json()["contact_prompt_eligible"]
+            assert me.json()["avatar_url"] is None
+            profile = client.post(
+                "/api/v1/me/profile", json={"nickname": "Socket user", "avatar_object_key": None}
+            )
+            assert profile.status_code == 200, profile.text
+            assert profile.json()["nickname"] == "Socket user"
+            assert "no-store" in profile.headers["cache-control"]
+            assert client.get("/api/v1/me").json()["nickname"] == "Socket user"
             assert client.get("/api/v1/home").status_code == 200
-            catalog = client.get("/api/v1/learning/catalog").json()
+            catalog_response = client.get("/api/v1/learning/catalog")
+            assert catalog_response.status_code == 200, catalog_response.text
+            assert "no-store" in catalog_response.headers["cache-control"]
+            catalog = catalog_response.json()
             assert not catalog["authorization_pending"]
+            assert catalog["user_stage"] == "NEW"
             assert (
                 next(row for row in catalog["items"] if row["scene_id"] == scene_ids[0])[
                     "trial_sentence"

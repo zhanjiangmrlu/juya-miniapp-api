@@ -10,6 +10,7 @@ from juya_miniapp_api.integrations.admin_api.schemas import (
     LearningCatalog,
     LearningModule,
 )
+from juya_miniapp_api.modules.learning.stage import LearningStageReader
 
 
 class CatalogClient(Protocol):
@@ -57,6 +58,8 @@ class CatalogService:
         client: CatalogClient,
         cache: JsonCache | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        *,
+        stage_reader: LearningStageReader | None = None,
     ) -> None:
         # 功能:初始化学习目录与授权缓存服务并保存所需依赖与配置
         # 参数:
@@ -68,6 +71,7 @@ class CatalogService:
         self._client = client
         self._cache = cache
         self._clock = clock
+        self._stage_reader = stage_reader
 
     async def modules(self) -> list[LearningModule]:
         # 功能:返回可用学习模块列表
@@ -83,7 +87,11 @@ class CatalogService:
         # Authorization, module switches and publication can change independently of
         # entitlement version. Always request the current authoritative projection.
         try:
-            return await self._client.get_catalog(user_id, summary)
+            result = await self._client.get_catalog(user_id, summary)
+            if not result.authorization_pending and self._stage_reader is not None:
+                facts = await self._stage_reader.get(user_id, self._clock())
+                return result.model_copy(update={"user_stage": facts.stage})
+            return result
         except AdminApiUnavailable:
             return LearningCatalog(authorization_pending=True)
 

@@ -215,9 +215,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Get Me Api V1 Me Get"
+                  "$ref": "#/components/schemas/MeResponse"
                 }
               }
             }
@@ -236,6 +234,63 @@
       }
     },
     "/api/v1/me/profile": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Update Profile",
+        "operationId": "update_profile_api_v1_me_profile_post",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "tags": [
           "me"
@@ -276,9 +331,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Update Profile Api V1 Me Profile Patch"
+                  "$ref": "#/components/schemas/MeResponse"
                 }
               }
             }
@@ -998,9 +1051,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Learning Catalog Api V1 Learning Catalog Get"
+                  "$ref": "#/components/schemas/LearningCatalog"
                 }
               }
             }
@@ -5521,6 +5572,41 @@
         ],
         "title": "InternalMessageRequest"
       },
+      "LearningCatalog": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "user_stage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "NEW",
+                  "ENTITLED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Stage"
+          },
+          "authorization_pending": {
+            "type": "boolean",
+            "title": "Authorization Pending",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "LearningCatalog"
+      },
       "LogoutRequest": {
         "properties": {
           "session_id": {
@@ -5536,6 +5622,121 @@
           "session_id"
         ],
         "title": "LogoutRequest"
+      },
+      "MeResponse": {
+        "properties": {
+          "public_id": {
+            "type": "string",
+            "title": "Public Id"
+          },
+          "juya_number": {
+            "type": "string",
+            "title": "Juya Number"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "nickname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nickname"
+          },
+          "avatar_object_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Object Key"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "last_active_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Active At"
+          },
+          "contact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProfileContactResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contact_prompt_eligible": {
+            "type": "boolean",
+            "title": "Contact Prompt Eligible"
+          },
+          "deletion": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deletion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "public_id",
+          "juya_number",
+          "status",
+          "nickname",
+          "avatar_object_key",
+          "avatar_url",
+          "created_at",
+          "last_active_at",
+          "contact",
+          "contact_prompt_eligible",
+          "deletion"
+        ],
+        "title": "MeResponse"
       },
       "Paragraph": {
         "properties": {
@@ -5627,6 +5828,121 @@
           "title"
         ],
         "title": "PreviewScene"
+      },
+      "ProfileContactResponse": {
+        "properties": {
+          "wechat_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wechat Id"
+          },
+          "self_edit_count": {
+            "type": "integer",
+            "title": "Self Edit Count"
+          },
+          "change_pending": {
+            "type": "boolean",
+            "title": "Change Pending"
+          },
+          "contact_status": {
+            "type": "string",
+            "title": "Contact Status"
+          },
+          "can_self_edit": {
+            "type": "boolean",
+            "title": "Can Self Edit"
+          },
+          "requires_correction": {
+            "type": "boolean",
+            "title": "Requires Correction"
+          },
+          "consent_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Version"
+          },
+          "consented_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consented At"
+          },
+          "withdrawn_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawn At"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "verified_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified By"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "wechat_id",
+          "self_edit_count",
+          "change_pending",
+          "contact_status",
+          "can_self_edit",
+          "requires_correction",
+          "consent_version",
+          "consented_at",
+          "withdrawn_at",
+          "verified_at",
+          "verified_by",
+          "updated_at"
+        ],
+        "title": "ProfileContactResponse"
       },
       "ProfileUpdate": {
         "properties": {

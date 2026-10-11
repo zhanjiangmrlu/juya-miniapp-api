@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Query, Response
 
 from juya_miniapp_api.integrations.admin_api.schemas import (
+    LearningCatalog,
     SceneEntry,
     SceneOpenResult,
     SignedResource,
@@ -43,14 +44,16 @@ def create_content_access_router(
         items = await catalog.modules()
         return {"items": [item.model_dump(mode="json") for item in items]}
 
-    @router.get("/learning/catalog")
+    @router.get("/learning/catalog", response_model=LearningCatalog)
     async def learning_catalog(
+        response: Response,
         user_id: Annotated[str, Depends(user_dependency)],
     ) -> dict[str, object]:
         # 功能:返回当前用户学习目录及访问权限
         # 参数:
         #     user_id: 当前操作所属用户的公开标识
         # 返回:当前用户学习目录、摘要与访问权限
+        response.headers["Cache-Control"] = "private, no-store"
         result = await catalog.catalog(user_id, {})
         return result.model_dump(mode="json")
 

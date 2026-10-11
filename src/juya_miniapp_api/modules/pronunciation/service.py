@@ -175,7 +175,7 @@ class PronunciationService:
                 expires_at=expiry,
                 code=code,
             )
-        if status in ("PENDING", "PREPARING", "RETRY"):
+        if status in ("PENDING", "PREPARING", "RETRY", "RUNNING", "RECOVER"):
             if task_id is None:
                 raise contract_error()
             return PronunciationResponse(status="PREPARING", task_id=task_id, code=code)

@@ -3,7 +3,7 @@
 - 分支：feature/v1.5-20261011；起始 HEAD：d3fadeba6c6d00c7d55caefde31d63cc18b3f551。
 - 独占仓库：juya-miniapp-api。共享迁移、服务重启及根目录文档由协调对话处理。
 - 依据：20261011 完整需求、技术方案 00/02/05/06/07/08；执行 executing-plans，保留既有身份、联系方式和反馈编排。
-- 当前阶段：本仓库代码与本地门禁完成，等待协调对话集成。内部接口已核对实际管理后端运行时，OpenAPI/TypeScript 已生成。
+- 当前阶段：本轮七项联调跟进中，五项BFF修复已完成完整本地门禁；录音审核开关和短文运营排序待管理后端权威契约。内部接口已核对实际管理后端运行时，OpenAPI/TypeScript 已刷新，等待协调对话更新根目录接口文档并集成消费者。
 
 ## 任务
 
@@ -19,7 +19,7 @@
 - 当前分层证据见下文；不把 Mock、InMemory 或 SQL 假 guard 视为真实授权链路通过。
 - 禁止创建迁移链、跨仓库修改、清主站库、改 .env、推送或部署。
 - 外部待验收：真实版权、供应商账户/预算、人工听音、OSS CORS/Range、微信设备及生产。
-- 状态：READY_FOR_INTEGRATION（本仓库代码与本地门禁）；全项目历史已知资源回填及外部验收仍按下文依赖执行。
+- 状态：LOCAL_VERIFIED_WAITING_UPSTREAM_RECORDING_AND_READING_ORDER；本轮五项BFF修复通过，未宣称全部七项或跨仓库联调完成。前次3f9207a门禁保留为历史记录，最新证据见文末。
 
 ## P0/P1 领域阶段
 
@@ -75,3 +75,32 @@
 - 收尾提交由本对话执行中文Conventional Commit；未推送、部署、切分支或修改其他仓库。READY仅表示本仓库可被协调对话集成，不代表历史已知媒体上游回填、收费预算、人工听音、版权、OSS/微信真机/生产已经验收。
 
 - 收尾代码提交：bb7a179 feat(v1.5): 装配真实授权闭环与旧收藏安全兼容；本次包含运行时、旧兼容、清理投递、同版状态、固定资源版本、OpenAPI/TypeScript和完整回归。提交后工作区干净。
+
+## 七项联调跟进（基线3f9207a）
+
+协调对话已要求修复真实契约缺口，并负责根目录接口文档；本对话仅改BFF与仓库contracts。本轮OpenAPI已刷新并通过快照验证，最终以下新门禁证明五项修复；旧219项是历史证据。
+
+| 项目 | 当前结论 | 证据/责任 |
+| --- | --- | --- |
+| /me avatar_url | `c6b7887`已实现并装配，完整门禁通过 | 仅本人已确认avatars/私有键的受控短签名，空/未配置返回null，public DTO实际声明；SDK本地签名及私有SQL验证，不代表OSS可访问 |
+| /me/profile POST/PUT兼容 | `c6b7887`已新增真实POST，保留PATCH，完整门禁通过 | 相同验证、头像确认、用户写入；真实JWT/Socket POST保存后GET读取通过 |
+| 录音审核开关 | 管理后端依赖；当前不发布编造recording_enabled | admin/BFF schema2 SceneDetail与Settings均无字段；通用system_config没有该key/默认/读取端口。需求2.4/7.6要求独立审核降级开关，需上游明确持久配置与内部DTO |
+| RUNNING/RECOVER发音 | 已RED→GREEN，完整门禁通过 | actual admin pronunciation.repository.claim/tasks写RUNNING/RECOVER，public_task原样返回；真实HMAC/SQL任务轮询映射PREPARING，仍无收费重试、非READY无URL |
+| user_stage | 权威事实投影已装配，完整门禁通过 | 需求6.1/31.4；本人有效正式/限时权益或已开始非开放内容为ENTITLED，其余NEW；仅呈现不授予访问；授权待定时null。6项单元、`4664e30`18项真实SQL及JWT/Socket目录通过 |
+| 短文运营排序 | 管理后端依赖；保留actual internal public_id排序 | short_reading无全局sort字段/命令；updated_at不是运营排序，package_item.position仅包内、多包不能猜全局。详见v15-reading-followup.md |
+| 完成重放核权 | `86080ac`及实际guard装配已完成，完整门禁通过 | service先核当前全文权限；SQL account锁下guard(None)核当前模块/发布/权益/到期，仍授权版更同key旧metadata可回放；new写入guard(int)必须当前版 |
+
+状态最终以本轮新完整门禁及新OpenAPI/TS提交为准；录音/全局排序没有产出前，不宣称前端七项缺口均已闭合。
+
+## 联调跟进最终本地门禁（2026-10-11）
+
+- `uv run ruff check src tests scripts` All checks passed；`uv run ruff format --check src tests scripts` 205 files already formatted；`uv run mypy src` 126 source files无错误。
+- `uv run pytest -q --tb=short` 221 passed/36 skipped，4.75s；普通模式缺少隔离数据库的项目skip，不作为SQL证据。
+- `uv run python scripts/test-v15-isolated.py -q --tb=short --show-capture=no --cov=juya_miniapp_api --cov-report=term:skip-covered --cov-fail-under=80` 最终256 passed/1 skipped，覆盖81.76%，19.65s。唯一skip是需显式授权环境的外部OSS验收。
+- 前轮254 passed/2 failed/1 skipped只用于诊断：两处新增夹具分别为缓存头等值断言过严、admin enqueue漏传cache_key；修正后重新执行上述完整门禁通过，没有降低覆盖率门槛。
+- SQL学习阶段18项证明有效/到期/暂停/撤销权益、陌生/失效用户、配置轮换下原开放历史不重分类、短文独立历史和真实清空；模块关闭后仍保留展示阶段而实际SQLAuthorizer拒绝全文。资料/联系方式均不构成阶段条件。
+- Socket完整用户流程继续通过，新增真实登录JWT下POST资料保存→GET本人读取avatar_url字段、目录NEW和no-store；发音RUNNING/RECOVER用实际admin持久任务/HMAC轮询，未启动worker或收费调用。
+- 独立只读评审未发现新的确证P1/P2；相关56项单元通过，SQL投影另用SQLite核验基础规则；最终生产SQL证据以上MySQL门禁为准。
+- OpenAPI由配置完整运行时重新生成：62条path、71个operation；TypeScript由openapi-typescript@7.10.1自动生成。新增真实POST /me/profile，MeResponse显式avatar_url，LearningCatalog显式NEW/ENTITLED/null。
+- 根目录接口文档由协调对话维护，其原3f9207a/70 operation基线必须更新到本轮新契约提交；本仓库不越界修改。
+- 未改.env、重启共享服务、应用共享库迁移、推送或部署。上游录音配置、短文全局运营排序及历史已知媒体回填依赖继续单独追踪，外部版权/人工听音/云端/微信设备/生产边界保持。

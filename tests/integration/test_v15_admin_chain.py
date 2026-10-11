@@ -49,6 +49,7 @@ async def test_hmac_authority_snapshot_final_facts_source_gate_and_review_indepe
         RedisNonceStore,
         verify_request_signature,
     )
+    from juya_admin_api.modules.pronunciation.domain import cache_key
     from juya_admin_api.modules.v15_access.router import create_v15_access_router
     from juya_admin_api.shared.errors import AppError as AdminError
 
@@ -294,6 +295,23 @@ async def test_hmac_authority_snapshot_final_facts_source_gate_and_review_indepe
                 content_type="word_card", content_id=scene, content_version=1, entry_id="medium-cup"
             )
             assert (await pronunciation.resolve(user, "cup-audio", current_ref)).status == "READY"
+            # Arrange private task rows only; no worker/cloud/budget invocation.
+            target = await runtime.pronunciation.repository.target("cup-audio")
+            assert target is not None
+            task = await runtime.pronunciation.repository.enqueue(
+                target,
+                cache_key(target, runtime.pronunciation.config),
+                runtime.pronunciation.config,
+            )
+            for internal_state in ("RUNNING", "RECOVER"):
+                async with sessions() as session, session.begin():
+                    await session.execute(
+                        text("UPDATE pronunciation_task SET status=:status WHERE public_id=:id"),
+                        {"status": internal_state, "id": task["public_id"]},
+                    )
+                preparing = await pronunciation.poll(user, task["public_id"], current_ref)
+                assert preparing.status == "PREPARING" and preparing.url is None
+                assert not preparing.can_retry
             signed = await V15SceneAuthority(sessions, client).signed_resource(
                 user, scene, "cup-audio", revision, datetime.now(UTC)
             )

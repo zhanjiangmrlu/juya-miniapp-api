@@ -20,6 +20,7 @@ class LearningCatalog(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[dict[str, Any]] = Field(default_factory=list)
+    user_stage: Literal["NEW", "ENTITLED"] | None = None
     authorization_pending: bool = False
 
 
