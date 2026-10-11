@@ -16,6 +16,7 @@ class MeView:
     contact: ContactView | None
     contact_prompt_eligible: bool = False
     deletion: dict[str, object] | None = None
+    avatar_url: str | None = None
 
 
 class UserService:
@@ -25,6 +26,7 @@ class UserService:
         contacts: ContactService,
         *,
         avatar_verifier: Callable[[str, str], Awaitable[str]] | None = None,
+        avatar_url_signer: Callable[[str, str], Awaitable[str]] | None = None,
         open_completion_count: Callable[[str], Awaitable[int]] | None = None,
     ) -> None:
         # 功能:初始化用户资料查询更新服务并保存所需依赖与配置
@@ -33,11 +35,13 @@ class UserService:
         #     repository: 用户资料存储仓库,承载用户资料业务操作
         #     contacts: 查询和更新用户联系方式的业务服务
         #     avatar_verifier: 核验头像归属和图片内容并返回固定对象键的异步回调
+        #     avatar_url_signer: 为本人固定头像签发私有OSS展示地址的异步回调
         #     open_completion_count: 查询用户开放场景完成数量的异步回调
         # 返回:无返回值。
         self._repository = repository
         self._contacts = contacts
         self._avatar_verifier = avatar_verifier
+        self._avatar_url_signer = avatar_url_signer
         self._open_completion_count = open_completion_count
 
     async def get_me(self, public_id: str) -> MeView:
@@ -62,7 +66,19 @@ class UserService:
             if profile.status == "DELETION_PENDING"
             else None
         )
-        return MeView(profile, contact, eligible, deletion)
+        return MeView(profile, contact, eligible, deletion, await self._avatar_url(profile))
+
+    async def _avatar_url(self, profile: UserProfile) -> str | None:
+        """只签本人已确认固定头像; 历史临时键或越界键不成为读取凭据。"""
+        key = profile.avatar_object_key
+        if (
+            self._avatar_url_signer is None
+            or not key
+            or not key.startswith("avatars/")
+            or not owned_avatar_key(profile.public_id, key)
+        ):
+            return None
+        return await self._avatar_url_signer(profile.public_id, key)
 
     async def update_profile(
         self,
@@ -91,7 +107,9 @@ class UserService:
         profile = await self._repository.update_profile(
             public_id, cleaned_nickname, avatar_object_key, now
         )
-        return MeView(profile, await self._contacts.get(public_id))
+        return MeView(
+            profile, await self._contacts.get(public_id), avatar_url=await self._avatar_url(profile)
+        )
 
     async def search(
         self, *, juya_number: str | None, nickname: str | None, limit: int = 50

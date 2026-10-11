@@ -2,6 +2,8 @@ import asyncio
 import base64
 import hashlib
 import re
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from typing import Any
 
@@ -29,7 +31,13 @@ class AvatarStore:
     """Only verified image bytes are copied into the private, server-owned avatar directory."""
 
     def __init__(
-        self, *, region: str, bucket: str, endpoint: str | None, credentials_provider: Any
+        self,
+        *,
+        region: str,
+        bucket: str,
+        endpoint: str | None,
+        credentials_provider: Any,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         # 功能:初始化小程序的AvatarStore对象并保存所需依赖与配置
         # 参数:
@@ -46,6 +54,37 @@ class AvatarStore:
             config.endpoint = endpoint
         self.client = oss.Client(config)
         self.bucket = bucket
+        self._credentials_provider = credentials_provider
+        self._clock = clock
+
+    async def sign_avatar_url(self, user_id: str, key: str) -> str:
+        """给本人已确认的私有头像签发最多五分钟的GET地址, 不读取云端对象。"""
+        if not key.startswith("avatars/") or not owned_avatar_key(user_id, key):
+            raise AppError("AVATAR_OBJECT_KEY_INVALID", "头像对象键无效", 422)
+        return await asyncio.to_thread(self._sign_avatar_url, key)
+
+    def _sign_avatar_url(self, key: str) -> str:
+        try:
+            credentials = self._credentials_provider.get_credentials()
+            expiry = getattr(credentials, "expiration", None)
+            ttl = 300
+            if getattr(credentials, "security_token", None) and expiry is None:
+                raise AppError("OSS_CREDENTIALS_EXPIRED", "OSS临时凭据有效期缺失", 503)
+            if expiry is not None:
+                if expiry.tzinfo is None:
+                    raise AppError("OSS_CREDENTIALS_EXPIRED", "OSS临时凭据时间无效", 503)
+                ttl = min(ttl, int((expiry - self._clock()).total_seconds()) - 30)
+            if ttl <= 0:
+                raise AppError("OSS_CREDENTIALS_EXPIRED", "OSS临时凭据已过期", 503)
+            result = self.client.presign(
+                oss.GetObjectRequest(bucket=self.bucket, key=key),
+                expires=timedelta(seconds=ttl),
+            )
+            return str(result.url)
+        except AppError:
+            raise
+        except Exception:
+            raise AppError("AVATAR_STORAGE_UNAVAILABLE", "头像签名暂不可用", 503) from None
 
     async def confirm(self, user_id: str, key: str) -> str:
         # 功能:核验已上传头像的归属与图片内容并固定头像地址

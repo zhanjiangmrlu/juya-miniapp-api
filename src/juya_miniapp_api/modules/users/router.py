@@ -9,6 +9,7 @@ from juya_miniapp_api.modules.contacts.domain import ContactView
 from juya_miniapp_api.modules.users.schemas import (
     AvatarUploadCredentialResponse,
     AvatarUploadRequest,
+    MeResponse,
     ProfileUpdate,
 )
 from juya_miniapp_api.modules.users.service import MeView, UserService
@@ -50,6 +51,7 @@ def serialize_me(view: MeView) -> dict[str, object]:
         "status": view.profile.status,
         "nickname": view.profile.nickname,
         "avatar_object_key": view.profile.avatar_object_key,
+        "avatar_url": view.avatar_url,
         "created_at": view.profile.created_at,
         "last_active_at": view.profile.last_active_at,
         "contact": _contact(view.contact),
@@ -94,7 +96,7 @@ def create_users_router(
             raise AppError("AVATAR_STORAGE_UNAVAILABLE", "头像上传暂不可用", 503)
         return uploads.create_avatar_upload(user_id, payload.content_type)
 
-    @router.get("/me")
+    @router.get("/me", response_model=MeResponse)
     async def get_me(
         response: Response,
         user_id: Annotated[str, Depends(user_dependency)],
@@ -107,7 +109,8 @@ def create_users_router(
         response.headers["Cache-Control"] = "private, no-store"
         return serialize_me(await service.get_me(user_id))
 
-    @router.patch("/me/profile")
+    @router.patch("/me/profile", response_model=MeResponse)
+    @router.post("/me/profile", response_model=MeResponse)
     async def update_profile(
         payload: ProfileUpdate,
         response: Response,
