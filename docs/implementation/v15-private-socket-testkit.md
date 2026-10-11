@@ -48,7 +48,7 @@ context manager为同步接口，和现有真实Socket e2e风格相同；应在�
 
 只接收 runner 的 `juya_v13_mini_<32位hex UUID>` 数据库名；数据库/Redis必须是127.0.0.1、精确对应私有库及Redis DB0。开连接前使用本地 Docker npipe/unix engine inspect 核对两个UUID容器的名称、运行状态、`juya.isolated-test` label和精确 HostPort。拒绝任意URL、共享库、外部Docker daemon与不归属当前runner的端口。
 
-两个 uvicorn 只绑定127.0.0.1，subprocess cwd均为本仓绝对根路径；admin使用其已有Python及实际src，由明确PYTHONPATH加载。环境使用操作系统必要字段白名单和本次内存随机密钥，不继承云密钥、代理、原数据库或收费配置；TTS/ASR/content AI关闭，不启动worker。服务stdout/stderr为DEVNULL，没有日志文件或令牌文件。client关闭环境代理，不跟随redirect，request hook仅允许本次两服务的loopback端口（允许真实API query）。
+两个 uvicorn 只绑定127.0.0.1，subprocess cwd均为本仓绝对根路径；admin使用其已有Python及实际src，由明确PYTHONPATH加载。环境使用操作系统必要字段白名单和本次内存随机密钥，不继承云密钥、代理、原数据库或收费配置；TTS/ASR/content AI关闭，不启动worker。服务stdout/stderr通过PIPE后台排空，原输入仅为内存中有界暂存；只保留/暴露最多12项错误类型、模块标识、JUYA配置字段名和固定网络audit原因，不输出原trace/env/token或URL，不落日志文件或令牌文件。client关闭环境代理，不跟随redirect，request hook仅允许本次两服务的loopback端口（允许真实API query）。
 
 seed复用既有 `tests/e2e/test_miniapp_socket_acceptance.py::seed_contract` 的schema2三开放场景fixture，不声称真实校对/版权/听审/发布。仅临时开启私有环境中的场景模块；退出时恢复原模块enabled，并删除seed自身的开放配置。场景/用户等测试数据由集中runner最终删除其私有容器。context finally仅终止本次自己创建的两个服务进程，不重启共享进程。
 
@@ -60,4 +60,20 @@ seed复用既有 `tests/e2e/test_miniapp_socket_acceptance.py::seed_contract` �
 
 2026-10-11：正常 `uv run pytest` 定向执行新增安全单测及Socket集成文件，13 passed、1 isolated-env skip（0.52s）；skip表示尚未在集中私有环境实测Socket。正常完整 collect-only已收集318项成功，没有scripts包导入错误。新文件Ruff/format通过，mypy src+helper共131源文件通过。
 
-当前代码已冻结交给协调者执行统一私有整库门禁；真实Socket结果待该轮完成后登记，不以单元测试或skip声称双服务链路通过。
+上述为首次准备证据；后续真实Socket结果见下面最新实测记录，不以单元测试或skip作为双服务验收。
+
+## 启动问题诊断与修复
+
+协调者首次集中门禁发现同库重复种子的 images/type+sha256 冲突，由其修复既有e2e seed，在唯一约束下复用同一已确认私有fixture资产；helper复用该seed，不改资源或HEAD合同。
+
+随后发现admin启动退出：actual admin Python没有PyJWT依赖，而helper顶层加载BFF JwtService间接导入jwt。实际admin解释器import helper回归先失败 ModuleNotFoundError(jwt)，将JwtService延后至仅BFF协调进程的会话签发方法后通过；不安装或修改admin依赖。两端Settings源码均仅读取环境，没有dotenv配置；该问题与cwd或cookie allow_insecure_http无关。
+
+最新准备证据：15个单元测试通过，含actual admin解释器import和诊断脱敏；无集中私有环境时Socket仍明确skip。Ruff/format及mypy src+helper的131源文件通过。启动失败现在指出admin/miniapp角色及内存安全diagnostics，无原日志落盘。
+
+## 最新真实Socket实测
+
+2026-10-11，协调执行者使用集中UUID私有 MySQL/Redis、实际管理端迁移，定向运行 `tests/integration/test_v15_private_socket_kit.py` 与其另行新增 `tests/integration/test_v15_socket_confirmation.py`，两项通过：`2 passed in 10.59s`。
+
+本工具用例实际通过两个真实uvicorn进程、真实签名JWT与SQL ACTIVE account/session、正常current_user验证、BFF→admin HMAC的schema2场景打开，以及无JWT、未入库ghost sid、伪签名、撤销会话被拒绝。纯公开ready/OpenAPI能力探测也通过。没有模拟生产JWT/session校验，没有云调用/worker或共享服务变更。
+
+该结论仅为两项定向真实Socket通过；本轮完整门禁仍由协调者继续执行，不在本文声明全套门禁通过。WeChat exchange/OSS HEAD仍为明确外部测试fixture，内容seed是隔离发布态fixture，不等于真实微信账号、OSS、版权、校对或听审验收。

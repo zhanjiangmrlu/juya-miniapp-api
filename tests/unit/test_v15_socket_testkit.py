@@ -1,4 +1,6 @@
 import importlib.util
+import os
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -156,3 +158,47 @@ def test_safe_capability_probe_returns_booleans_from_actual_manifest_without_ide
         "pronunciations": True,
     }
     assert all(isinstance(value, bool) for value in status.values())
+
+
+def test_actual_admin_python_can_import_private_guard_without_bff_jwt_dependency():
+    root = Path(__file__).resolve().parents[2]
+    python = root.parent / "juya-admin-api/.venv/Scripts/python.exe"
+    if not python.is_file():
+        pytest.skip("actual adjacent admin runtime interpreter required")
+    result = subprocess.run(
+        [str(python), "-c", "import v15_socket_testkit"],
+        cwd=root,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join([str(root / "scripts"), str(root / "src")]),
+        },
+        capture_output=True,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        check=False,
+        timeout=15,
+    )
+    assert result.returncode == 0, "Admin isolation guard must not require BFF-only JWT dependency"
+
+
+def test_startup_diagnostics_only_keep_error_types_modules_and_config_names():
+    raw = (
+        "ModuleNotFoundError: No module named 'jwt'\n"
+        "RuntimeError: JUYA_JWT_SECRET=private-key Authorization: Bearer private-token\n"
+        "mysql+pymysql://root:private-password@127.0.0.1:12345/private\n"
+        "RuntimeError: Isolated socket runtime blocked external name resolution\n"
+    )
+    diagnostics = _KIT.safe_startup_diagnostics(raw)
+    assert "ModuleNotFoundError(module=jwt)" in diagnostics
+    assert "field=JUYA_JWT_SECRET" in diagnostics
+    assert "audit=external_dns_blocked" in diagnostics
+    serialized = repr(diagnostics)
+    assert not any(
+        value in serialized
+        for value in (
+            "private-key",
+            "private-token",
+            "private-password",
+            "mysql+",
+            "Authorization",
+        )
+    )

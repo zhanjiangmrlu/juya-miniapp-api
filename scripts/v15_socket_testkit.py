@@ -15,6 +15,7 @@ import secrets
 import socket
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -29,7 +30,6 @@ from pydantic import SecretStr
 from sqlalchemy import text
 
 from juya_miniapp_api.infrastructure.db.session import create_engine, create_session_factory
-from juya_miniapp_api.infrastructure.security.jwt_service import JwtService
 from juya_miniapp_api.shared.ids import new_ulid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -150,6 +150,23 @@ def audit_loopback(event: str, args: tuple[object, ...]) -> None:
         raise RuntimeError("Isolated socket runtime blocked external name resolution")
 
 
+def safe_startup_diagnostics(raw: str) -> list[str]:
+    """Extract only fixed error types, identifier-shaped modules and configuration field names."""
+    result: list[str] = []
+    for error_type in re.findall(r"^([A-Za-z][A-Za-z0-9_.]*(?:Error|Exception)):", raw, re.M):
+        if error_type not in result:
+            result.append(error_type)
+    for name in re.findall(r"ModuleNotFoundError: No module named '([A-Za-z0-9_.]+)'", raw):
+        result.append("ModuleNotFoundError(module=" + name + ")")
+    for name in sorted(set(re.findall(r"\bJUYA_[A-Z_]+\b", raw))):
+        result.append("field=" + name)
+    if "Isolated socket runtime blocked external name resolution" in raw:
+        result.append("audit=external_dns_blocked")
+    if "Isolated socket runtime blocked an external connection" in raw:
+        result.append("audit=external_connect_blocked")
+    return result[-12:]
+
+
 @dataclass(frozen=True)
 class FixtureSession:
     user_id: str
@@ -181,6 +198,9 @@ class SocketTestKit:
         self._jwt_secret = secrets.token_urlsafe(32)
         self._hmac_secret = secrets.token_urlsafe(32)
         self._processes: list[subprocess.Popen[bytes]] = []
+        self._roles: list[str] = []
+        self._diagnostic_threads: list[threading.Thread] = []
+        self.startup_diagnostics: dict[str, list[str]] = {}
         self._modules: list[dict[str, Any]] = []
         self._configs: list[int] = []
         self._ports = {
@@ -208,6 +228,7 @@ class SocketTestKit:
         return {
             **env,
             "PYTHONIOENCODING": "utf-8",
+            "PYTHONDONTWRITEBYTECODE": "1",
             "JUYA_ENVIRONMENT": "test",
             "JUYA_V13_ISOLATED_DATABASE": self.resources.database_name,
             "JUYA_TEST_DATABASE_URL": self.resources.database_url.get_secret_value(),
@@ -256,34 +277,47 @@ class SocketTestKit:
                         [str(source), str(ROOT / "src"), str(ROOT / "tests"), str(ROOT / "scripts")]
                     ),
                 }
-                self._processes.append(
-                    subprocess.Popen(
-                        [
-                            str(python),
-                            "-m",
-                            "uvicorn",
-                            "v15_socket_entrypoint:app",
-                            "--host",
-                            "127.0.0.1",
-                            "--port",
-                            str(urlsplit(endpoint).port),
-                            "--no-access-log",
-                            "--log-level",
-                            "critical",
-                        ],
-                        cwd=ROOT,
-                        env=env,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    )
+                process = subprocess.Popen(
+                    [
+                        str(python),
+                        "-m",
+                        "uvicorn",
+                        "v15_socket_entrypoint:app",
+                        "--host",
+                        "127.0.0.1",
+                        "--port",
+                        str(urlsplit(endpoint).port),
+                        "--no-access-log",
+                        "--log-level",
+                        "critical",
+                    ],
+                    cwd=ROOT,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
+                self._processes.append(process)
+                self._roles.append(role)
+                self.startup_diagnostics[role] = []
+                thread = threading.Thread(
+                    target=self._capture_startup, args=(process, role), daemon=True
+                )
+                self._diagnostic_threads.append(thread)
+                thread.start()
             with self.client() as client:
                 for endpoint in (self.admin_base_url, self.miniapp_base_url):
                     deadline = time.monotonic() + 40
                     while True:
-                        if any(process.poll() is not None for process in self._processes):
-                            raise RuntimeError("Private socket runtime exited before readiness")
+                        for role, process, thread in zip(
+                            self._roles, self._processes, self._diagnostic_threads, strict=True
+                        ):
+                            if process.poll() is not None:
+                                thread.join(timeout=0.5)
+                                raise RuntimeError(
+                                    "Private socket " + role + " runtime exited before readiness; "
+                                    "diagnostics=" + repr(self.startup_diagnostics[role])
+                                )
                         try:
                             if client.get(endpoint + "/health/ready").status_code == 200:
                                 break
@@ -296,6 +330,15 @@ class SocketTestKit:
         except BaseException:
             self.__exit__(None, None, None)
             raise
+
+    def _capture_startup(self, process: subprocess.Popen[bytes], role: str) -> None:
+        if process.stdout is None:
+            return
+        buffer = ""
+        while chunk := process.stdout.read(1024):
+            # Raw input is transient/bounded; retain and expose only the allowlisted summary.
+            buffer = (buffer + chunk.decode("utf-8", errors="replace"))[-8192:]
+            self.startup_diagnostics[role] = safe_startup_diagnostics(buffer)
 
     def __exit__(
         self,
@@ -312,6 +355,10 @@ class SocketTestKit:
                 process.kill()
                 process.wait(timeout=5)
         self._processes.clear()
+        for thread in self._diagnostic_threads:
+            thread.join(timeout=1)
+        self._diagnostic_threads.clear()
+        self._roles.clear()
         if self._modules or self._configs:
             asyncio.run(self._restore_seed_configuration())
 
@@ -428,6 +475,9 @@ class SocketTestKit:
         return asyncio.run(self._issue_session())
 
     async def _issue_session(self) -> FixtureSession:
+        # Admin Python does not depend on PyJWT; signing is performed only by the BFF coordinator.
+        from juya_miniapp_api.infrastructure.security.jwt_service import JwtService
+
         now = datetime.now(UTC)
         user, identity = new_ulid(now), new_ulid(now)
         engine = create_engine(
