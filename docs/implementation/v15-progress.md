@@ -103,4 +103,5 @@
 - 独立只读评审未发现新的确证P1/P2；相关56项单元通过，SQL投影另用SQLite核验基础规则；最终生产SQL证据以上MySQL门禁为准。
 - OpenAPI由配置完整运行时重新生成：62条path、71个operation；TypeScript由openapi-typescript@7.10.1自动生成。新增真实POST /me/profile，MeResponse显式avatar_url，LearningCatalog显式NEW/ENTITLED/null。
 - 根目录接口文档由协调对话维护，其原3f9207a/70 operation基线必须更新到本轮新契约提交；本仓库不越界修改。
+- 本轮代码/公共契约冻结提交：`19f28ef fix(v1.5): 补齐联调阶段与发音状态授权契约`；配套前置提交`86080ac`、`c6b7887`与`4664e30`。
 - 未改.env、重启共享服务、应用共享库迁移、推送或部署。上游录音配置、短文全局运营排序及历史已知媒体回填依赖继续单独追踪，外部版权/人工听音/云端/微信设备/生产边界保持。
