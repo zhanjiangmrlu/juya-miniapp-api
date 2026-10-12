@@ -69,6 +69,27 @@ sh deploy/build-artifact.sh "${CI_COMMIT_REF_NAME}" "${CI_COMMIT_SHA}" artifact
 制品包含压缩 Docker 镜像、镜像标签、配置摘要、SHA256 校验清单和 `deploy` 配置。
 镜像入口已经在 Dockerfile 中配置，无须在流水线额外写 uvicorn 启动命令。
 
+### Docker Hub 拉取超时
+
+2026-10-12 构建日志 `raw-55f5b29f-909f-49d2-b056-4411c1ec8c02_3.log`
+在 Dockerfile 原第 1 行拉取 `docker.io/library/python:3.13-slim` 元数据时，
+连接 `registry-1.docker.io:443` 超时。该次尚未进入应用依赖安装或 ECS 部署。
+
+Dockerfile 已参照管理端改用 uv 官方 GHCR Python 镜像
+`ghcr.io/astral-sh/uv:0.12.19-python3.13-trixie-slim`，固定摘要
+`sha256:aba5f865793af9275ceaa06d30935dfc6db8b81969c9fb099b0ebca6396b189e`。
+生产依赖从现有 `uv.lock` 导出版本及哈希，通过阿里云 PyPI 镜像安装并强制哈希校验；
+构建阶段安装应用，运行阶段只复制虚拟环境和入口脚本，继续使用非 root 用户。
+官方镜像与固定摘要用法见 [uv Docker 文档](https://docs.astral.sh/uv/guides/integration/docker/)。
+
+将此修复提交推送至 miniapp-api 的 `test` 分支后，新建一次流水线运行。
+构建任务的工作目录、执行命令、制品名称和上传路径沿用现有配置，Docker Daemon 保持开启。
+
+本地验证：实际 `linux/amd64` 构建通过，68 个已安装包版本均匹配锁文件；
+只读、非 root、禁用外网的容器中，真实业务配置下 `/health/live` 返回 200，
+匿名 `/api/v1/me` 返回 401 / `ACCESS_TOKEN_REQUIRED`，Celery 应用加载成功。
+15 个部署和打包用例通过。云效构建机的 GHCR 网络及最终发布仍需新运行验证。
+
 ## 4. 构建物上传
 
 | 字段 | 值 |
