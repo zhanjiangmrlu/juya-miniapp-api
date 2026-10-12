@@ -120,8 +120,9 @@ free -h
 docker stats --no-stream
 ```
 
-原管理端 2 GiB 配置的各容器内存上限之和约 1696 MiB，新增 API/Worker/Beat 上限
-为 256/192/96 MiB，总和约 2240 MiB。上限不是预分配，但同机部署需按实际可用内存、
+管理端基础配置的各容器内存上限之和约 1696 MiB；测试 Beat 调整至 256 MiB 后为
+1792 MiB。新增 API/Worker/Beat 上限为 256/192/96 MiB，总和约 2336 MiB。
+上限不是预分配，但同机部署需按实际可用内存、
 峰值和 OOM 情况评估，不能仅依据构建成功判断容量足够。
 
 在服务器创建两个独立配置文件，按仓库模板填写，不要覆盖管理端 `/etc/juya/compose.env`：
@@ -206,3 +207,31 @@ curl --silent --show-error -i https://test-api.juyayingyu.com/api/v1/me
 
 以上是本地验证，不代表云效服务连接、目标 ECS 网络、RAM 角色、TLS 站点或真实微信
 登录已经验收。实际云效发布与公网检查由手动配置后运行流水线完成。
+
+## 9. 测试 ECS 首次发布记录（2026-10-12）
+
+经授权，已通过 SSH 上传本地构建制品并执行同一个 `ecs-artifact-deploy.sh`，
+首次发布镜像为 `juya-miniapp-api-test:5c0f5cb8b779e164b3868cc1ee9f48a37ed75f98`。
+这是 ECS 发布检查；云效流水线本身仍需手动运行验收。
+
+- `/etc/juya/miniapp-compose.env`、`/etc/juya/miniapp-api.env` 已生成，权限均为 600。
+  数据库账号、HMAC 和 OSS 环境凭证复用现有测试配置；JWT、字段加密和查找密钥
+  在服务器生成并固定保存，微信配置从用户提供的文件写入。
+- 六个应用进程均为 `test`，共享 HMAC 一致；管理端回调为 `http://miniapp-api:8000`。
+  管理端保留 `72ec5c5` 镜像，Beat 上限调整为 256 MiB，通过外部 Compose override
+  生效，旧制品目录未修改。下一次管理端发布需使用包含该内存调整的代码。
+- 修复了 root 发布脚本 `umask 077` 导致预检脚本不可被非 root 容器读取的问题。
+  仅将不含凭据的预检脚本设为 0444，运行配置仍为 600。
+- 首次预检确认真实路由、schema 19、MySQL、Redis、管理 API 均可用。
+  两个后端的内部签名读取请求各返回 200，缺少签名的请求返回 401。
+- Nginx 配置检查通过，`test-api` 从占位 503 切换为代理 `127.0.0.1:8001`。
+  公网 HTTPS readiness 返回 200，匿名 `/api/v1/me` 返回 401 `ACCESS_TOKEN_REQUIRED`。
+  `test-h5` 的同源 `/api/` 也返回相同结果。公网 `/internal/` 被 Nginx 拒绝为 404。
+- 发布后观察约五分钟，小程序 Worker 已成功执行周期任务、Beat 正常调度，
+  六个应用容器均无重启/OOM；管理 Beat 已稳定运行超过十五分钟。
+  当时服务器可用内存约 330 MiB，此结果仅覆盖低负载运行，未进行负载验收。
+
+运行配置备份位于 `/etc/juya/backups/20261012T071633Z-miniapp-prepare`，
+Nginx 备份位于 `/etc/juya/backups/20261012T073203Z-miniapp-nginx`。
+备份含密钥，应保持仅 root 可读，恢复时保留原 JWT、字段加密和查找密钥。
+真实微信登录、微信合法请求域名和真机业务流程尚需验收。
