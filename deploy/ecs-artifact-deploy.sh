@@ -61,6 +61,9 @@ previous_compose() {
 }
 compose config --quiet
 # Test mode can return readiness=200 with no business routes; require real runtime.
+# umask 077 makes copied files root-only; the image runs as a non-root user.
+# This script contains no credentials and is mounted read-only in the container.
+chmod 0444 "$release/deploy/runtime-preflight.py"
 compose run --rm --no-deps --entrypoint python \
   -v "$release/deploy/runtime-preflight.py:/tmp/runtime-preflight.py:ro" \
   miniapp-api /tmp/runtime-preflight.py
