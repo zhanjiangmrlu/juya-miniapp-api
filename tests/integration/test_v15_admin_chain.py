@@ -23,7 +23,14 @@ from juya_miniapp_api.modules.favorites.snapshots_sql import SQLAlchemySnapshotR
 from juya_miniapp_api.shared.errors import AppError
 from juya_miniapp_api.shared.ids import new_ulid
 
-ADMIN_SRC = Path(__file__).resolve().parents[3] / "juya-admin-api" / "src"
+ADMIN_SRC = (
+    Path(
+        os.getenv(
+            "JUYA_CI_ADMIN_SOURCE", str(Path(__file__).resolve().parents[3] / "juya-admin-api")
+        )
+    )
+    / "src"
+)
 
 
 @pytest.mark.asyncio
@@ -45,7 +52,7 @@ async def test_hmac_authority_snapshot_final_facts_source_gate_and_review_indepe
             else f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
         )
     )
-    sys.path.append(str(admin_dependencies))
+    sys.path.append(os.getenv("JUYA_CI_ADMIN_SITE_PACKAGES", str(admin_dependencies)))
     from juya_admin_api.infrastructure.security.service_hmac import (
         RedisNonceStore,
         verify_request_signature,

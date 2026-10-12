@@ -23,7 +23,14 @@ from juya_miniapp_api.modules.short_reading.authority import V15ReadingAuthority
 from juya_miniapp_api.shared.errors import AppError
 from juya_miniapp_api.shared.ids import new_ulid
 
-ADMIN_SRC = Path(__file__).resolve().parents[3] / "juya-admin-api" / "src"
+ADMIN_SRC = (
+    Path(
+        os.getenv(
+            "JUYA_CI_ADMIN_SOURCE", str(Path(__file__).resolve().parents[3] / "juya-admin-api")
+        )
+    )
+    / "src"
+)
 
 
 @pytest.mark.asyncio
@@ -39,7 +46,9 @@ async def test_reading_preview_cover_uses_actual_sql_hmac_binding_without_body_a
     assert re.fullmatch(r"/juya_v13_mini_[0-9a-f]{32}", db.path)
     admin_src = ADMIN_SRC
     sys.path.insert(0, str(admin_src))
-    sys.path.append(str(admin_src.parent / ".venv" / "Lib" / "site-packages"))
+    sys.path.append(
+        os.getenv("JUYA_CI_ADMIN_SITE_PACKAGES", str(admin_src.parent / ".venv/Lib/site-packages"))
+    )
     from juya_admin_api.infrastructure.security.service_hmac import (
         RedisNonceStore,
         verify_request_signature,

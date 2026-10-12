@@ -21,7 +21,11 @@ from juya_miniapp_api.infrastructure.db.session import create_engine, create_ses
 from juya_miniapp_api.shared.ids import new_ulid
 
 ROOT = Path(__file__).parents[2]
-ADMIN = ROOT.parent / "juya-admin-api"
+ADMIN = Path(os.getenv("JUYA_CI_ADMIN_SOURCE", str(ROOT.parent / "juya-admin-api")))
+ADMIN_PYTHON = os.getenv(
+    "JUYA_CI_ADMIN_PYTHON",
+    str(ADMIN / (".venv/Scripts/python.exe" if os.name == "nt" else ".venv/bin/python")),
+)
 
 
 def free_port() -> int:
@@ -232,7 +236,7 @@ def test_normal_runtime_over_socket_closes_miniapp_user_flows(tmp_path: Path) ->
         for name, python, repo, app, port in (
             (
                 "admin",
-                str(ADMIN / ".venv/Scripts/python.exe"),
+                ADMIN_PYTHON,
                 ADMIN,
                 "socket_admin_runtime_app:app",
                 admin_port,

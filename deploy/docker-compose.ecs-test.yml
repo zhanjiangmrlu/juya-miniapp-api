@@ -1,0 +1,79 @@
+name: juya-miniapp-test
+
+x-app: &app
+  image: ${JUYA_MINIAPP_API_IMAGE:?Set JUYA_MINIAPP_API_IMAGE}
+  env_file:
+    - ${JUYA_RUNTIME_ENV_FILE:?Set JUYA_RUNTIME_ENV_FILE}
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=32m,mode=1777
+  security_opt:
+    - no-new-privileges:true
+  networks:
+    - shared
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+x-runtime: &runtime
+  JUYA_ENVIRONMENT: test
+  JUYA_LOCAL_DEV_MODE: "false"
+  JUYA_OSS_EXPECTED_BUCKET: juya-test
+  JUYA_ADMIN_API_BASE_URL: http://admin-api:8000
+  JUYA_REDIS_URL: redis://redis:6379/0
+
+services:
+  miniapp-api:
+    <<: *app
+    mem_limit: 256m
+    environment:
+      <<: *runtime
+      JUYA_PROCESS_TYPE: api
+      PORT: "8000"
+    ports:
+      - "127.0.0.1:${JUYA_MINIAPP_API_PORT:-8001}:8000"
+
+  miniapp-worker:
+    <<: *app
+    mem_limit: 192m
+    environment:
+      <<: *runtime
+      JUYA_PROCESS_TYPE: worker
+      JUYA_ENABLE_BEAT: "false"
+    entrypoint: ["celery"]
+    command:
+      - -A
+      - juya_miniapp_api.infrastructure.tasks.celery_app:celery_app
+      - worker
+      - --loglevel=INFO
+      - --concurrency=1
+      - --prefetch-multiplier=1
+      - --max-tasks-per-child=100
+      - --queues=miniapp.message,miniapp.account,miniapp.privacy,miniapp.stats
+    healthcheck:
+      disable: true
+
+  miniapp-beat:
+    <<: *app
+    mem_limit: 96m
+    environment:
+      <<: *runtime
+      JUYA_PROCESS_TYPE: worker
+      JUYA_ENABLE_BEAT: "false"
+    entrypoint: ["celery"]
+    command:
+      - -A
+      - juya_miniapp_api.infrastructure.tasks.celery_app:celery_app
+      - beat
+      - --loglevel=INFO
+      - --schedule=/tmp/celerybeat-schedule
+    healthcheck:
+      disable: true
+
+networks:
+  shared:
+    external: true
+    name: ${JUYA_SHARED_NETWORK:-juya-admin-small_default}

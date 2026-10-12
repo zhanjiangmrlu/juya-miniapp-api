@@ -1,40 +1,64 @@
+name: juya-miniapp-api-test
+
+# Configure BOTH code sources in Flow: miniapp-api/test and admin-api/test.
+# Working directory: miniapp-api repository root. Admin default path: ../juya-admin-api.
+# Validation task: Docker Daemon OFF. Image build task: Docker Daemon ON.
+# Bind GitHub service connection, artifact store and TEST-only machine group in console.
 stages:
-  - verify
-  - image
-  - staging
-  - production
+  verify_stage:
+    name: 隔离测试
+    jobs:
+      verify_job:
+        name: 原生 MySQL Redis 验证
+        runsOn: public/cn-hangzhou
+        steps:
+          verify_step:
+            step: Command
+            with:
+              run: |
+                set -eu
+                test "${CI_COMMIT_REF_NAME}" = test
+                sh deploy/ci-verify.sh
 
-verify:
-  stage: verify
-  script:
-    - uv sync --locked
-    - uv run ruff check .
-    - uv run ruff format --check .
-    - uv run mypy src
-    - python -c "import os; assert os.getenv('JUYA_TEST_DATABASE_URL'), 'CI MySQL URL is required'; assert os.getenv('JUYA_TEST_REDIS_URL'), 'CI Redis URL is required'"
-    - uv run pytest --cov=juya_miniapp_api --cov-report=term-missing --cov-fail-under=80
+  build_stage:
+    name: 构建镜像制品
+    jobs:
+      build_job:
+        name: Docker 构建与制品上传
+        runsOn: public/cn-hangzhou
+        steps:
+          build_step:
+            step: Command
+            with:
+              run: |
+                set -eu
+                test "${CI_COMMIT_REF_NAME}" = test
+                sh deploy/build-artifact.sh "${CI_COMMIT_REF_NAME}" "${CI_COMMIT_SHA}" artifact
+          upload_step:
+            step: ArtifactUpload
+            with:
+              uploadType: flowPublic
+              artifact: juya_miniapp_api_test
+              filePath:
+                - artifact/
 
-build-and-scan:
-  stage: image
-  needs: [verify]
-  script:
-    - docker build --pull -t "$ACR_IMAGE:$CI_COMMIT_SHA" .
-    - trivy image --exit-code 1 --severity HIGH,CRITICAL "$ACR_IMAGE:$CI_COMMIT_SHA"
-    - docker login -u "$ACR_USERNAME" -p "$ACR_PASSWORD" "$ACR_REGISTRY"
-    - docker push "$ACR_IMAGE:$CI_COMMIT_SHA"
-
-deploy-staging:
-  stage: staging
-  needs: [build-and-scan]
-  script:
-    - aliyun ecs RunCommand --RegionId "$STAGING_REGION" --InstanceId.1 "$STAGING_ECS_ID" --CommandId "$STAGING_DEPLOY_COMMAND_ID"
-    - pwsh ./scripts/smoke.ps1 "$STAGING_BASE_URL"
-
-approve-production:
-  stage: production
-  needs: [deploy-staging]
-  when: manual
-  script:
-    - aliyun ecs RunCommand --RegionId "$PRODUCTION_REGION" --InstanceId.1 "$PRODUCTION_CANARY_ID" --CommandId "$PRODUCTION_DEPLOY_COMMAND_ID"
-    - pwsh ./scripts/smoke.ps1 "$PRODUCTION_BASE_URL"
-    - aliyun ecs RunCommand --RegionId "$PRODUCTION_REGION" --InstanceId.1 "$PRODUCTION_BATCH_ID" --CommandId "$PRODUCTION_DEPLOY_COMMAND_ID"
+  deploy_stage:
+    name: 发布测试 ECS
+    jobs:
+      deploy_job:
+        name: 发布小程序后端
+        component: VMDeploy
+        with:
+          artifact: $[stages.build_stage.build_job.upload_step.artifacts.juya_miniapp_api_test]
+          machineGroup: ${ECS_TEST_MACHINE_GROUP_ID}
+          artifactDownloadPath: /home/admin/app/juya-miniapp-api-test.tgz
+          executeUser: root
+          run: |
+            set -eu
+            test "${CI_COMMIT_REF_NAME}" = test
+            staging="$(mktemp -d /tmp/juya-miniapp-api-test.XXXXXX)"
+            trap 'rm -rf "$staging"' EXIT
+            tar xzf /home/admin/app/juya-miniapp-api-test.tgz -C "$staging"
+            bundle="$staging/artifact"
+            if [ ! -d "$bundle" ]; then bundle="$staging"; fi
+            sh "$bundle/deploy/ecs-artifact-deploy.sh" "${CI_COMMIT_REF_NAME}" "$bundle"

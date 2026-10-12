@@ -115,6 +115,10 @@ V1.3 最低 schema 为 `0015`。完整场景返回 `scene_id/revision_id/content
 
 ## Docker Compose
 
+云效测试环境发布及控制台可粘贴配置见
+[小程序后端云效部署](docs/operations/yunxiao-api-deployment.md)。测试与镜像构建分开执行；
+数据库迁移仍由管理后端负责，ECS 只发布小程序 API、Worker 和独立 Beat。
+
 先复制 `.env.example` 为 `.env` 并填写密钥，再执行：
 
 ```powershell

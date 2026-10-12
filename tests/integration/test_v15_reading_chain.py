@@ -25,7 +25,14 @@ from juya_miniapp_api.modules.short_reading.sql_repository import SQLAlchemyRead
 from juya_miniapp_api.shared.errors import AppError
 from juya_miniapp_api.shared.ids import new_ulid
 
-ADMIN_SRC = Path(__file__).resolve().parents[3] / "juya-admin-api" / "src"
+ADMIN_SRC = (
+    Path(
+        os.getenv(
+            "JUYA_CI_ADMIN_SOURCE", str(Path(__file__).resolve().parents[3] / "juya-admin-api")
+        )
+    )
+    / "src"
+)
 
 
 @pytest.mark.asyncio
@@ -36,7 +43,9 @@ async def test_reading_actual_hmac_preview_grants_progress_completion_and_module
         pytest.skip("isolated MySQL and Redis required")
     admin_src = ADMIN_SRC
     sys.path.insert(0, str(admin_src))
-    sys.path.append(str(admin_src.parent / ".venv" / "Lib" / "site-packages"))
+    sys.path.append(
+        os.getenv("JUYA_CI_ADMIN_SITE_PACKAGES", str(admin_src.parent / ".venv/Lib/site-packages"))
+    )
     from juya_admin_api.infrastructure.security.service_hmac import (
         RedisNonceStore,
         verify_request_signature,

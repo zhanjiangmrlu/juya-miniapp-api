@@ -162,7 +162,13 @@ def test_safe_capability_probe_returns_booleans_from_actual_manifest_without_ide
 
 def test_actual_admin_python_can_import_private_guard_without_bff_jwt_dependency():
     root = Path(__file__).resolve().parents[2]
-    python = root.parent / "juya-admin-api/.venv/Scripts/python.exe"
+    admin = Path(os.getenv("JUYA_CI_ADMIN_SOURCE", str(root.parent / "juya-admin-api")))
+    python = Path(
+        os.getenv(
+            "JUYA_CI_ADMIN_PYTHON",
+            str(admin / (".venv/Scripts/python.exe" if os.name == "nt" else ".venv/bin/python")),
+        )
+    )
     if not python.is_file():
         pytest.skip("actual adjacent admin runtime interpreter required")
     result = subprocess.run(
