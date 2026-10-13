@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "kind": "api",
+  "project": "juya-miniapp-api",
+  "repository": "juya-miniapp-api",
+  "checks": [
+    ["uv", "sync", "--frozen"],
+    ["{python}", "-m", "ruff", "check", "."],
+    ["{python}", "-m", "ruff", "format", "--check", "."],
+    ["{python}", "-m", "mypy", "src"],
+    ["{python}", "scripts/test-v15-isolated.py", "-q"]
+  ],
+  "dockerfile": "Dockerfile",
+  "compose_files": {
+    "test": ["docker-compose.ecs-test.yml"],
+    "production": ["docker-compose.ecs-production.yml"]
+  },
+  "services": ["miniapp-api", "miniapp-worker", "miniapp-beat"],
+  "api_service": "miniapp-api",
+  "worker_services": ["miniapp-worker"],
+  "beat_services": ["miniapp-beat"],
+  "migration_service": null
+}
