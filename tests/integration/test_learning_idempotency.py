@@ -27,7 +27,9 @@ def _database_url() -> str:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_progress_and_completion_are_monotonic_and_idempotent() -> None:
+async def test_concurrent_progress_and_completion_are_monotonic_and_idempotent(
+    learning_scene,
+) -> None:
     # 功能:验证并发进度保持单调且学习完成保持幂等
     # 参数:
     #     无形参。
@@ -51,6 +53,7 @@ async def test_concurrent_progress_and_completion_are_monotonic_and_idempotent()
                 {"user_id": user_id},
             )
 
+        await learning_scene.create(factory, user_id, "scene-concurrent", NOW)
         service = LearningService(SQLAlchemyLearningRepository(factory))
         progress_results = await asyncio.gather(
             *(
@@ -117,6 +120,7 @@ async def test_concurrent_progress_and_completion_are_monotonic_and_idempotent()
         assert completion_count == 1
         assert checkin_count == 1
     finally:
+        await learning_scene.clear()
         async with factory() as session, session.begin():
             await session.execute(
                 text("DELETE FROM user_account WHERE public_id = :public_id"),

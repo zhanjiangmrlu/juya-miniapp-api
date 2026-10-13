@@ -2,6 +2,7 @@ import asyncio
 import base64
 import hashlib
 import json
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -10,13 +11,17 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from juya_miniapp_api.infrastructure.analytics_events import append_activity_events, append_event
+from juya_miniapp_api.integrations.admin_api.v15_guard import FinalFactsGuard
 from juya_miniapp_api.modules.checkins.service import beijing_learning_date
+from juya_miniapp_api.modules.favorites.snapshots_sql import lock_active_user
 from juya_miniapp_api.modules.learning.domain import (
     CompletionResult,
     LearningProgress,
     ReadingPosition,
 )
 from juya_miniapp_api.shared.errors import AppError
+
+SceneGuard = Callable[[AsyncSession, str, str], Awaitable[None]]
 
 
 class LearningRepository(Protocol):
@@ -177,13 +182,19 @@ def _utc_datetime(value: datetime | None) -> datetime | None:
 
 
 class SQLAlchemyLearningRepository:
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        guard: SceneGuard = FinalFactsGuard.scene,
+    ) -> None:
         # 功能:初始化SQL场景学习进度仓库并保存所需依赖与配置
         # 参数:
         #     self: 当前SQL场景学习进度仓库实例
         #     session_factory: 创建数据库事务会话的异步工厂
+        #     guard: 在账号锁内核验场景当前模块、发布和权益的最终守卫
         # 返回:无返回值。
         self._session_factory = session_factory
+        self._guard = guard
 
     async def save_progress(
         self,
@@ -206,7 +217,8 @@ class SQLAlchemyLearningRepository:
         #     is_scene_open: 场景是否属于当前开放内容配置
         # 返回:场景阅读位置、请求序号与学习时间
         async with self._session_factory() as session, session.begin():
-            internal_id = await self._lock_user(session, user_id)
+            internal_id = await lock_active_user(session, user_id)
+            await self._guard(session, user_id, scene_id)
             current = await self._load_progress(session, user_id, scene_id, for_update=True)
             serialized_position = json.dumps(
                 {"entry_id": position.entry_id, "offset": position.offset},
@@ -286,7 +298,9 @@ class SQLAlchemyLearningRepository:
         # 返回:学习进度、首次完成标记与打卡日期
         learning_day = beijing_learning_date(now)
         async with self._session_factory() as session, session.begin():
-            internal_id = await self._lock_user(session, user_id)
+            internal_id = await lock_active_user(session, user_id)
+            # 功能:重复完成也须先通过当前授权,全部进度/完成/打卡/统计写入共用这些锁。
+            await self._guard(session, user_id, scene_id)
             current = await self._load_progress(session, user_id, scene_id, for_update=True)
             created = current is None or current.completed_at is None
             if current is None:
@@ -573,21 +587,6 @@ class SQLAlchemyLearningRepository:
                 user_id=user_id,
                 occurred_at=now,
             )
-
-    @staticmethod
-    async def _lock_user(session: AsyncSession, public_id: str) -> int:
-        # 功能:锁定用户账号行并取得数据库内部主键
-        # 参数:
-        #     session: 异步数据库会话
-        #     public_id: 当前操作所属用户账号的公开标识
-        # 返回:已锁定用户账号的数据库内部主键
-        internal_id = await session.scalar(
-            text("SELECT id FROM user_account WHERE public_id = :public_id FOR UPDATE"),
-            {"public_id": public_id},
-        )
-        if internal_id is None:
-            raise AppError("USER_NOT_FOUND", "用户不存在", 404)
-        return int(internal_id)
 
     @classmethod
     async def _load_progress(

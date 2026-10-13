@@ -109,6 +109,34 @@ class FinalFactsGuard:
         self.secret = credential_secret
         self.authorizer = SQLAuthorizer()
 
+    @staticmethod
+    async def scene(session: AsyncSession, user_id: str, identity: str) -> None:
+        # 功能:在场景写事务内锁定当前模块/发布/权益,拒绝在途失权和锁等待期间到期。
+        # 参数:session为已锁定ACTIVE账号的写事务,user_id和identity为用户及场景公开标识。
+        # 返回:无返回值;失权或发布类型发生变化时抛出场景拒权错误。
+        try:
+            _, _, initial = await scene_revision(session, identity)
+            kind: Literal["dialogue", "word_card"] = (
+                "word_card" if initial.template_type in {"word_card", "vocabulary"} else "dialogue"
+            )
+            facts = await SQLAuthorizer()(
+                session, user_id, kind, identity, datetime.now(UTC), lock=True
+            )
+            if not facts.full_access:
+                raise AppError("SCENE_ACCESS_DENIED", "无权学习该场景", 403)
+            _, _, current = await scene_revision(session, identity, lock=True)
+        except AppError as error:
+            if error.code == "CONTENT_NOT_PUBLISHED":
+                raise AppError("SCENE_ACCESS_DENIED", "场景当前不可学习", 403) from error
+            raise
+        current_kind = (
+            "word_card" if current.template_type in {"word_card", "vocabulary"} else "dialogue"
+        )
+        if current_kind != kind or (
+            facts.expires_at is not None and datetime.now(UTC) >= facts.expires_at
+        ):
+            raise AppError("SCENE_ACCESS_DENIED", "场景内容或权益已变化,请重新打开", 403)
+
     async def snapshot(self, session: AsyncSession, user_id: str, data: ConfirmedSnapshot) -> None:
         now = datetime.now(UTC)
         credential = data._confirmation_credential

@@ -20,9 +20,9 @@ from juya_miniapp_api.shared.ids import new_ulid
 
 
 @pytest.mark.asyncio
-async def test_transaction_events_are_idempotent_paginated_and_survive_anonymized_deletion() -> (
-    None
-):
+async def test_transaction_events_are_idempotent_paginated_and_survive_anonymized_deletion(
+    learning_scene,
+) -> None:
     # 功能:验证事务统计事件幂等可分页且匿名化注销后仍保留
     # 参数:
     #     无形参。
@@ -47,6 +47,7 @@ async def test_transaction_events_are_idempotent_paginated_and_survive_anonymize
                 {"id": public, "number": public[-12:]},
             )
             internal = await session.scalar(text("SELECT LAST_INSERT_ID()"))
+        await learning_scene.create(factory, internal, "v13-scene", now)
         learning = SQLAlchemyLearningRepository(factory)
         await learning.save_progress(public, "v13-scene", 1, ReadingPosition("one"), now)
         results = await asyncio.gather(
@@ -153,6 +154,7 @@ async def test_transaction_events_are_idempotent_paginated_and_survive_anonymize
         assert len([row for row in retained if row.event_type == "USER_ACTIVE_WEEK"]) == 1
         assert all(row.occurred_at is not None for row in retained)
     finally:
+        await learning_scene.clear()
         async with factory() as session, session.begin():
             if internal is not None:
                 await session.execute(

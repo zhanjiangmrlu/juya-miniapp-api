@@ -219,15 +219,15 @@ def install_application_routes(app: FastAPI, settings: Settings) -> RuntimeResou
         secret=_required(settings.internal_hmac_secret, "internal_hmac_secret").encode(),
     )
     contact_service = ContactService(SQLAlchemyContactRepository(sessions), field_cipher)
-    learning_repository = SQLAlchemyLearningRepository(sessions)
+    facts_guard = FinalFactsGuard(
+        _required(settings.internal_hmac_secret, "internal_hmac_secret").encode()
+    )
+    learning_repository = SQLAlchemyLearningRepository(sessions, facts_guard.scene)
     learning_overviews = SQLAlchemyLearningOverviewRepository(sessions)
     catalog_service = CatalogService(
         admin, cache, stage_reader=SQLLearningStageReader(sessions), features=admin
     )
     learning_service = LearningService(learning_repository, catalog_service)
-    facts_guard = FinalFactsGuard(
-        _required(settings.internal_hmac_secret, "internal_hmac_secret").encode()
-    )
     snapshot_repository = SQLAlchemySnapshotRepository(sessions, facts_guard.snapshot)
     snapshots = SnapshotService(snapshot_repository, admin)
     scene_authority = V15SceneAuthority(sessions, admin)
