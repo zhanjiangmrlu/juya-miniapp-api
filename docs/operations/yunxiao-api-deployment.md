@@ -18,8 +18,9 @@ ECS 发布阶段不执行迁移、不新建数据库或数据卷、不重启管�
 | 第二代码源路径变量 | 若实际路径不同，给测试任务设置 `JUYA_CI_ADMIN_SOURCE` 为真实绝对路径 |
 | 主机组 | 仅包含目标测试 ECS，可复用管理后端测试主机组 |
 
-主代码源绑定 `CI_COMMIT_REF_NAME` 和 `CI_COMMIT_SHA`，不能使用第二代码源的提交号
-作为 miniapp 镜像标签。第二代码源只用于隔离测试，不随 miniapp 制品部署管理端。
+主代码源绑定 `CI_COMMIT_REF_NAME`，镜像 SHA 由构建脚本从自身所在 miniapp 仓库的
+`git rev-parse HEAD` 读取，不能使用第二代码源的提交号作为 miniapp 镜像标签。
+第二代码源只用于隔离测试，不随 miniapp 制品部署管理端。
 测试日志会记录实际管理端迁移源码的提交号。`.aliyun-ci.yml` 提供编排参考；
 已有流水线通过控制台配置代码源、服务连接、Docker Daemon 和主机组。
 
@@ -62,12 +63,73 @@ uv run python scripts/test-v15-isolated.py -q --cov=juya_miniapp_api --cov-fail-
 ```sh
 set -eu
 test "${CI_COMMIT_REF_NAME}" = test
-sh deploy/build-artifact.sh "${CI_COMMIT_REF_NAME}" "${CI_COMMIT_SHA}" artifact
+sh deploy/build-artifact.sh "${CI_COMMIT_REF_NAME}" auto artifact
 ```
 
 镜像标签为 `juya-miniapp-api-test:<主代码源40位提交SHA>`，平台为 `linux/amd64`。
 制品包含压缩 Docker 镜像、镜像标签、配置摘要、SHA256 校验清单和 `deploy` 配置。
 镜像入口已经在 Dockerfile 中配置，无须在流水线额外写 uvicorn 启动命令。
+
+### 构建速度优化（2026-10-13）
+
+继续使用杭州公共集群、固定 GHCR 基础镜像和云效制品发布。运行阶段从同一份
+Python 基础文件系统复制已移除 uv/uvx 的内容，不引入另一个 Python 版本或新的
+镜像仓库。原先在后续层 `rm` 的 uv 二进制仍留在底层，现在运行镜像不再携带该层。
+依赖锁定、哈希校验、非 root 用户、API/Worker 入口和健康检查保持原有行为。
+
+`deploy/build-image.sh` 自动探测 Buildx 本地缓存导出能力。探测使用包含一个小文件的
+scratch 镜像，不拉取基础镜像、不运行子容器。支持时导出 `mode=max` 的中间层到
+`/root/.cache/juya-miniapp-buildkit/current`，下次从该目录导入；成功后替换旧缓存，
+避免不断累积旧 blob。实际构建失败仍返回非零，不会退回另一条路径继续发布。
+若进程被强制终止，下一次先恢复完整的上一份缓存，并清理本脚本遗留的临时代次。
+该目录应由云效按任务隔离恢复，不与其他正在运行的本地任务共用。
+不支持 Buildx 或本地缓存导出时，保留原来的 `docker build`，使用平台提供的缓存。
+本机支持导出不代表云效代理支持，首次云效日志必须确认所走的分支。
+
+**现有控制台流水线需要同步配置；修改参考 YAML 不会自动更新控制台：**
+
+1. 构建命令改为上面的 `auto` 命令。旧命令仍兼容；若传入管理端 SHA，会输出差异
+   并使用 miniapp 仓库的真实 SHA，不再使用错误的标签。
+2. 在“变量和缓存 → 缓存”启用远端文件缓存，添加以下目录（参考 YAML 已配置）：
+
+   ```text
+   /root/.cache/uv
+   /root/.cache/juya-ci-native
+   /root/.cache/juya-miniapp-buildkit
+   ```
+
+   若任务用户不是 root，目录必须与其实际 `HOME/.cache` 一致。不要把 Docker
+   数据目录或临时测试数据库作为文件缓存目录。uv/Python 工具缓存与测试数据分开，
+   UUID 测试库、虚拟环境及日志仍只存在于本次临时目录。
+3. 检查日志出现 `importing previous BuildKit cache` 和依赖层 `CACHED`。
+   首次运行建立缓存；锁文件、Dockerfile 或基础镜像改变时，相关层会重新构建。
+   若出现 `local cache exporter unavailable`，需要检查任务的 Docker/Buildx 能力和
+   平台镜像缓存设置，不能把文件缓存已开启当作镜像层缓存已生效。
+
+默认压缩级别由 gzip/pigz 的 6 调整为 3，优先使用已安装的 pigz。制品格式仍为
+`image.tar.gz`，外层继续由云效归档；没有去掉 SHA256 或镜像身份校验。
+可通过 `JUYA_IMAGE_GZIP_LEVEL=1..9` 对比速度与包大小；只接受单个合法数字。
+可用 `JUYA_IMAGE_CACHE_MODE=off` 关闭脚本的缓存探测和导入/导出，回到原构建路径；
+这不会关闭 Docker 构建器已有的原生缓存。
+
+构建日志包含 `docker-build`、`docker-save`、`image-identity`、`image-compress` 的
+分段秒数，以及镜像压缩后的字节数。总耗时还包含云效排队、代码检出、制品归档与
+上传下载，需用同一流水线的真实运行比较。10～15 分钟是优化目标，不是验收结果。
+缓存能力见 [云效缓存文档](https://help.aliyun.com/zh/yunxiao/user-guide/pipeline-cache)
+和 [Docker 本地缓存文档](https://docs.docker.com/build/cache/backends/local/)。
+
+本次本地验证（不代表云效已发布）：
+
+- 完整 UUID 隔离测试：467 passed、1 skipped；临时 MySQL/Redis 已清理。
+- Ruff、格式、mypy 和 Shell 语法检查通过；部署/打包回归用例通过。
+- Linux/amd64 实际构建、缓存导出及再次导入通过；未删除共享 Docker 缓存。
+- 运行镜像每一层均不含 uv/uvx；只读、非 root、禁用外网的容器中，入口可启动，
+  `/health/live` 返回 200，真实业务路由匿名 `/api/v1/me` 返回 401
+  `ACCESS_TOKEN_REQUIRED`；Python 扩展和 Celery 可加载。
+- 镜像压缩文件 99,657,464 字节（约 95 MiB），原提供包中为 121,539,040 字节
+  （约 116 MiB），减少约 18%；13 项制品 SHA256 和镜像身份校验通过。
+- 以上镜像及测试使用当时本地工作区；云效验收须核对优化提交 SHA、缓存恢复日志、
+  分段耗时、制品上传及 ECS 部署结果，不使用本地已有缓存的秒数推算云效总耗时。
 
 ### Docker Hub 拉取超时
 

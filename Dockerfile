@@ -22,21 +22,29 @@ RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
         --index-url https://mirrors.aliyun.com/pypi/simple/ . \
     && uv pip check --python /app/.venv/bin/python
 
-FROM python-base AS runtime
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    UV_PROJECT_ENVIRONMENT=/app/.venv \
-    PATH=/app/.venv/bin:$PATH
+# 同一固定基础镜像的运行文件系统,保留 Python/系统库,去掉构建工具。
+FROM python-base AS runtime-filesystem
 
 RUN rm /usr/local/bin/uv /usr/local/bin/uvx \
     && groupadd --system juya \
     && useradd --system --gid juya --home-dir /app juya
 
+# 新建运行层,避免 rm 后 uv 的 54 MiB 原始层仍随 docker save 发布。
+FROM scratch AS runtime
+COPY --from=runtime-filesystem / /
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    PATH=/app/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+
 WORKDIR /app
 COPY --from=builder --chown=juya:juya /app/.venv /app/.venv
 COPY --chown=juya:juya scripts/entrypoint.sh ./scripts/entrypoint.sh
 RUN chmod 0555 ./scripts/entrypoint.sh
+
+ARG JUYA_SOURCE_COMMIT
+LABEL org.opencontainers.image.revision=$JUYA_SOURCE_COMMIT
 
 USER juya
 EXPOSE 8000

@@ -86,6 +86,9 @@ def deployment(tmp_path: Path) -> tuple[str, Path, dict[str, str]]:
     (binaries / "python3").write_text(
         f"#!/bin/sh\nexec '{posix(Path(sys.executable))}' \"$@\"\n", encoding="utf-8", newline="\n"
     )
+    (binaries / "git").write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "${{CHECKOUT_SHA:-{SHA}}}"\n', newline="\n"
+    )
     subprocess.run([bash, "-c", f"chmod +x '{posix(binaries)}'/*"], check=True)
     server = tmp_path / "server"
     server.mkdir()
@@ -102,6 +105,7 @@ def deployment(tmp_path: Path) -> tuple[str, Path, dict[str, str]]:
         "JUYA_DEPLOY_TEST_MODE": "1",
         "JUYA_DEPLOY_TEST_ROOT": posix(server),
         "JUYA_COMPOSE_ENV_FILE": posix(env_file),
+        "JUYA_BUILDKIT_CACHE_DIR": posix(tmp_path / "build-cache"),
     }
     return bash, bundle, environment
 
@@ -156,7 +160,7 @@ def test_rejects_corrupt_package_before_docker(deployment, tmp_path):
 def test_first_release_only_starts_miniapp_services(deployment, tmp_path):
     result = run_deploy(deployment)
     assert result.returncode == 0, result.stderr
-    calls = (tmp_path / "calls").read_text()
+    calls = (tmp_path / "calls").read_text(encoding="utf-8")
     assert "-p juya-miniapp-test" in calls
     assert "runtime-preflight.py" in calls
     assert "up -d --no-deps miniapp-api" in calls
@@ -169,7 +173,7 @@ def test_missing_business_configuration_does_not_stop_old_services(deployment, t
     previous_release(deployment, tmp_path)
     result = run_deploy(deployment, FAIL_PREFLIGHT="1")
     assert result.returncode != 0
-    assert "stop " not in (tmp_path / "calls").read_text()
+    assert "stop " not in (tmp_path / "calls").read_text(encoding="utf-8")
     assert (tmp_path / "server/current-release").resolve().name == "previous"
 
 
@@ -178,7 +182,7 @@ def test_failed_upgrade_restores_previous_release(deployment, tmp_path, failure)
     previous_release(deployment, tmp_path)
     result = run_deploy(deployment, **{failure: "1"})
     assert result.returncode != 0
-    assert "old:previous|" in (tmp_path / "calls").read_text()
+    assert "old:previous|" in (tmp_path / "calls").read_text(encoding="utf-8")
     assert "restoring previous" in result.stderr
     assert (tmp_path / "server/current-release").resolve().name == "previous"
 
@@ -186,14 +190,16 @@ def test_failed_upgrade_restores_previous_release(deployment, tmp_path, failure)
 def test_failed_first_release_stops_partial_application(deployment, tmp_path):
     result = run_deploy(deployment, FAIL_READY="1")
     assert result.returncode != 0
-    assert "stop miniapp-beat miniapp-worker miniapp-api" in (tmp_path / "calls").read_text()
+    assert "stop miniapp-beat miniapp-worker miniapp-api" in (tmp_path / "calls").read_text(
+        encoding="utf-8"
+    )
     assert not (tmp_path / "server/current-release").exists()
 
 
 def test_loaded_image_must_match_package(deployment, tmp_path):
     result = run_deploy(deployment, LOADED_IMAGE_ID="sha256:" + "c" * 64)
     assert result.returncode == 65, result.stderr
-    assert "stop " not in (tmp_path / "calls").read_text()
+    assert "stop " not in (tmp_path / "calls").read_text(encoding="utf-8")
 
 
 def test_force_killed_worker_aborts_upgrade(deployment, tmp_path):
@@ -256,7 +262,7 @@ def test_build_exports_verifiable_artifact_without_daemon_version_query(deployme
         assert (
             hashlib.sha256((output / filename.removeprefix("*")).read_bytes()).hexdigest() == digest
         )
-    assert "version" not in (tmp_path / "calls").read_text()
+    assert "|version" not in (tmp_path / "calls").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("environment", ["test", "production"])
@@ -283,5 +289,150 @@ def test_conflicting_same_sha_release_does_not_retag_previous_image(deployment, 
     result = run_deploy(deployment)
     assert result.returncode != 0
     assert "different content" in result.stderr
-    calls = (tmp_path / "calls").read_text() if (tmp_path / "calls").exists() else ""
+    calls = (
+        (tmp_path / "calls").read_text(encoding="utf-8") if (tmp_path / "calls").exists() else ""
+    )
     assert "load --input" not in calls
+
+
+def run_build(deployment, tmp_path, supplied_sha=SHA, output_name="output", **flags):
+    bash, _, environment = deployment
+    return subprocess.run(
+        [
+            bash,
+            "-c",
+            'export PATH="$JUYA_TEST_PATH"; exec sh "$1" test "$2" "$3"',
+            "test-runner",
+            posix(ROOT / "deploy/build-artifact.sh"),
+            supplied_sha,
+            posix(tmp_path / output_name),
+        ],
+        cwd=ROOT,
+        env={**environment, **flags},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=15,
+    )
+
+
+def test_build_tags_checkout_instead_of_second_source_commit(deployment, tmp_path):
+    result = run_build(deployment, tmp_path, supplied_sha="b" * 40)
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "output/image-ref.txt").read_text().strip() == IMAGE
+    assert "checkout" in result.stdout
+
+
+def test_build_accepts_auto_checkout_sha(deployment, tmp_path):
+    result = run_build(deployment, tmp_path, supplied_sha="auto")
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "output/image-ref.txt").read_text().strip() == IMAGE
+
+
+def test_build_rejects_invalid_checkout_before_docker(deployment, tmp_path):
+    result = run_build(deployment, tmp_path, CHECKOUT_SHA="not-a-commit")
+    assert result.returncode != 0
+    assert not (tmp_path / "calls").exists()
+
+
+def test_build_honors_fast_gzip_level(deployment, tmp_path):
+    result = run_build(deployment, tmp_path, JUYA_IMAGE_GZIP_LEVEL="1")
+    assert result.returncode == 0, result.stderr
+    # RFC 1952: gzip XFL=4 identifies the fastest compression setting.
+    assert (tmp_path / "output/image.tar.gz").read_bytes()[8] == 4
+    with tarfile.open(tmp_path / "output/image.tar.gz") as archive:
+        assert json.load(archive.extractfile("manifest.json"))[0]["RepoTags"] == [IMAGE]
+
+
+@pytest.mark.parametrize("level", ["0", "10", "--force", ""])
+def test_build_rejects_invalid_compression_level_before_docker(deployment, tmp_path, level):
+    result = run_build(deployment, tmp_path, JUYA_IMAGE_GZIP_LEVEL=level)
+    assert result.returncode != 0
+    assert not (tmp_path / "calls").exists()
+
+
+@pytest.fixture
+def cache_builder(deployment, tmp_path):
+    binaries = tmp_path / "bin"
+    (binaries / "docker").write_text(
+        "#!/bin/sh\n"
+        'printf "%s\\n" "$*" >> "$CALL_LOG"\n'
+        'case "$*" in\n'
+        '  "buildx version") [ "${NO_BUILDX:-0}" != 1 ];;\n'
+        '  "buildx build "*)\n'
+        '    case "$*" in *"type=cacheonly"*) '
+        '[ "${NO_CACHE_BACKEND:-0}" != 1 ] || exit 1;;\n'
+        '      *) [ "${FAIL_BUILD:-0}" != 1 ] || exit 73;; esac\n'
+        '    for arg in "$@"; do\n'
+        '      case "$arg" in type=local,dest=*)\n'
+        "        dest=${arg#type=local,dest=}; dest=${dest%%,mode=*}\n"
+        '        mkdir -p "$dest"; printf "{}\\n" > "$dest/index.json";; esac\n'
+        "    done;;\n"
+        '  "build "*) [ "${FAIL_BUILD:-0}" != 1 ] || exit 73;;\n'
+        '  "save --output "*) cp "$FIXTURE_ARCHIVE" "$3";;\n'
+        "  *) exit 64;;\n"
+        "esac\n",
+        newline="\n",
+    )
+    return deployment
+
+
+def test_build_restores_exported_cache_on_next_run(cache_builder, tmp_path):
+    first = run_build(cache_builder, tmp_path)
+    assert first.returncode == 0, first.stderr
+    assert (tmp_path / "build-cache/current/index.json").is_file()
+    second = run_build(cache_builder, tmp_path, output_name="second-output")
+    assert second.returncode == 0, second.stderr
+    assert "--cache-from type=local,src=" in (tmp_path / "calls").read_text(encoding="utf-8")
+    assert (tmp_path / "second-output/image-id.txt").read_text().strip() == IMAGE_ID
+    assert sorted(p.name for p in (tmp_path / "build-cache").iterdir()) == ["current"]
+
+
+@pytest.mark.parametrize("flag", ["NO_BUILDX", "NO_CACHE_BACKEND"])
+def test_unsupported_cache_keeps_existing_build_path(cache_builder, tmp_path, flag):
+    result = run_build(cache_builder, tmp_path, **{flag: "1"})
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "output/image-ref.txt").read_text().strip() == IMAGE
+    assert "build --progress=plain" in (tmp_path / "calls").read_text(encoding="utf-8")
+
+
+def test_failed_cached_build_preserves_cache_and_blocks_artifact(cache_builder, tmp_path):
+    first = run_build(cache_builder, tmp_path)
+    assert first.returncode == 0, first.stderr
+    index = tmp_path / "build-cache/current/index.json"
+    before = index.read_bytes()
+    (tmp_path / "calls").write_text("")
+    result = run_build(cache_builder, tmp_path, output_name="failed-output", FAIL_BUILD="1")
+    assert result.returncode == 73
+    assert index.read_bytes() == before
+    assert not (tmp_path / "failed-output").exists()
+    assert "\nbuild --progress=plain" not in (tmp_path / "calls").read_text(encoding="utf-8")
+    assert sorted(p.name for p in (tmp_path / "build-cache").iterdir()) == ["current"]
+
+
+def test_killed_cache_rotation_recovers_without_orphaned_blobs(cache_builder, tmp_path):
+    mv = tmp_path / "bin/mv"
+    mv.write_text(
+        "#!/bin/sh\n"
+        '/usr/bin/mv "$@" || exit $?\n'
+        'case "$*" in *"/swap."*"/previous")\n'
+        '  if [ "${KILL_CACHE_SWAP:-0}" = 1 ]; then kill -KILL "$PPID"; fi;;\n'
+        "esac\n",
+        newline="\n",
+    )
+    subprocess.run([cache_builder[0], "-c", f"chmod +x '{posix(mv)}'"], check=True)
+    first = run_build(cache_builder, tmp_path)
+    assert first.returncode == 0, first.stderr
+    interrupted = run_build(
+        cache_builder, tmp_path, output_name="interrupted-output", KILL_CACHE_SWAP="1"
+    )
+    assert interrupted.returncode != 0
+    assert not (tmp_path / "build-cache/current").exists()
+    assert list((tmp_path / "build-cache").glob("swap.*/previous/index.json"))
+    (tmp_path / "calls").write_text("")
+    recovered = run_build(cache_builder, tmp_path, output_name="recovered-output")
+    assert recovered.returncode == 0, recovered.stderr
+    assert "--cache-from type=local,src=" in (tmp_path / "calls").read_text(encoding="utf-8")
+    assert (tmp_path / "recovered-output/image-ref.txt").read_text().strip() == IMAGE
+    assert sorted(p.name for p in (tmp_path / "build-cache").iterdir()) == ["current"]

@@ -4,6 +4,13 @@ name: juya-miniapp-api-test
 # Working directory: miniapp-api repository root. Admin default path: ../juya-admin-api.
 # Validation task: Docker Daemon OFF. Image build task: Docker Daemon ON.
 # Bind GitHub service connection, artifact store and TEST-only machine group in console.
+cache:
+  cacheDirs:
+    - /root/.cache/uv
+    - /root/.cache/juya-ci-native
+    - /root/.cache/juya-miniapp-buildkit
+  cacheMode: remote
+
 stages:
   verify_stage:
     name: 隔离测试
@@ -33,7 +40,7 @@ stages:
               run: |
                 set -eu
                 test "${CI_COMMIT_REF_NAME}" = test
-                sh deploy/build-artifact.sh "${CI_COMMIT_REF_NAME}" "${CI_COMMIT_SHA}" artifact
+                sh deploy/build-artifact.sh "${CI_COMMIT_REF_NAME}" auto artifact
           upload_step:
             step: ArtifactUpload
             with:

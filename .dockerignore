@@ -16,6 +16,8 @@ dist
 build
 artifact
 artifacts
+.cache
+**/.cache
 .coverage
 .coverage.*
 htmlcov
