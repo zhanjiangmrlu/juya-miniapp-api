@@ -173,6 +173,8 @@ class InMemoryAccountRepository:
             request = self._active_request(user_id)
             if request.status == "DELETING":
                 raise AppError("DELETION_ALREADY_PROCESSING", "账号注销正在处理中", 409)
+            if _database_datetime(now) >= _database_datetime(request.effective_at):
+                raise AppError("DELETION_REVOCATION_EXPIRED", "账号注销撤回期限已过", 409)
             request.status = "REVOKED"
             request.revoked_at = now
             self.user_status[user_id] = "ACTIVE"
@@ -369,6 +371,8 @@ class SQLAlchemyAccountRepository:
                 raise AppError("DELETION_NOT_FOUND", "注销申请不存在", 404)
             if row["status"] == "DELETING":
                 raise AppError("DELETION_ALREADY_PROCESSING", "账号注销正在处理中", 409)
+            if _database_datetime(now) >= _database_datetime(cast(datetime, row["effective_at"])):
+                raise AppError("DELETION_REVOCATION_EXPIRED", "账号注销撤回期限已过", 409)
             await session.execute(
                 text(
                     "UPDATE account_deletion_request SET status = 'REVOKED', revoked_at = :now "

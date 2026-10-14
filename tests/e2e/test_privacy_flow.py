@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -63,3 +64,52 @@ async def test_clear_then_request_and_revoke_deletion_over_http() -> None:
     assert requested.json()["status"] == "PENDING"
     assert revoked.status_code == 200
     assert revoked.json()["status"] == "REVOKED"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("days", [7, 8], ids=["exact-cutoff", "worker-delayed-day-eight"])
+async def test_expired_deletion_revoke_returns_conflict_without_restoring_account(
+    days: int,
+) -> None:
+    # 功能:验证等待期到期后HTTP撤回返回通用错误DTO且不恢复账号
+    # 参数:days: 申请后经过的整天数。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
+    repository = InMemoryAccountRepository()
+    repository.seed_user("user-1")
+    now = datetime(2026, 9, 28, 8, 0, tzinfo=UTC)
+
+    async def current_user() -> str:
+        # 功能:返回测试自有账号标识
+        # 参数:无形参。
+        # 返回:测试账号公开标识
+        return "user-1"
+
+    async def revoke_sessions(user_id: str, reason: str, now: datetime) -> None:
+        # 功能:隔离真实会话服务,撤回操作不触发会话注销
+        # 参数:user_id: 账号标识;reason: 会话注销原因;now: 操作时间。
+        # 返回:无返回值。
+        del user_id, reason, now
+
+    service = AccountLifecycleService(repository, revoke_sessions)
+    app = FastAPI()
+    install_error_handlers(app)
+    app.include_router(
+        create_accounts_router(service, user_dependency=current_user, clock=lambda: now)
+    )
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        requested = await client.post("/api/v1/me/deletion")
+        assert requested.status_code == 202
+        request_id = requested.json()["id"]
+        before = replace(repository.deletions[request_id])
+        now += timedelta(days=days)
+        rejected = await client.post("/api/v1/me/deletion/revoke")
+
+    assert rejected.status_code == 409
+    body = rejected.json()
+    assert body["code"] == "DELETION_REVOCATION_EXPIRED"
+    assert set(body) == {"code", "message", "request_id", "details"}
+    assert body["details"] == {}
+    assert repository.deletions[request_id] == before
+    assert repository.user_status["user-1"] == "DELETION_PENDING"
+    assert not repository.outbox

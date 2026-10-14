@@ -1,5 +1,6 @@
 import asyncio
-from datetime import UTC, datetime, timedelta
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
@@ -80,6 +81,104 @@ async def test_deletion_request_is_idempotent_and_effective_after_seven_days() -
 
 
 @pytest.mark.asyncio
+async def test_revoke_just_before_cutoff_restores_account_without_clearing_data() -> None:
+    # 功能:验证截止前一微秒允许撤回且保留学习数据和权益
+    # 参数:无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
+    repository = InMemoryAccountRepository()
+    repository.seed_user("user-1")
+    repository.learning_rows.add("user-1")
+    repository.entitlements.add("user-1")
+    service = AccountLifecycleService(repository, RevocationRecorder())
+    request = await service.request_deletion("user-1", NOW)
+    revoked_at = NOW + timedelta(days=7, microseconds=-1)
+
+    revoked = await service.revoke_deletion("user-1", revoked_at)
+
+    assert revoked.status == "REVOKED"
+    assert revoked.revoked_at == revoked_at
+    assert revoked.requested_at == NOW
+    assert revoked.effective_at == NOW + timedelta(days=7)
+    assert repository.user_status["user-1"] == "ACTIVE"
+    assert repository.learning_rows == {"user-1"}
+    assert repository.entitlements == {"user-1"}
+    assert not repository.outbox
+    assert request.id == revoked.id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "now",
+    [
+        NOW + timedelta(days=7),
+        NOW + timedelta(days=7, microseconds=1),
+        NOW + timedelta(days=8),
+        (NOW + timedelta(days=7)).astimezone(timezone(timedelta(hours=8))),
+        (NOW + timedelta(days=7)).replace(tzinfo=None),
+    ],
+    ids=["exact-cutoff", "after-cutoff", "worker-delayed-day-eight", "beijing", "naive-utc"],
+)
+async def test_revoke_at_or_after_cutoff_leaves_pending_request_unchanged(now: datetime) -> None:
+    # 功能:验证到期即拒绝撤回,不依赖worker且不改申请、账号或数据
+    # 参数:now: 截止或截止后的操作时间,包含不同时间表示。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
+    repository = InMemoryAccountRepository()
+    repository.seed_user("user-1")
+    repository.learning_rows.add("user-1")
+    repository.entitlements.add("user-1")
+    service = AccountLifecycleService(repository, RevocationRecorder())
+    request = await service.request_deletion("user-1", NOW)
+    before = replace(request)
+
+    with pytest.raises(AppError) as expired:
+        await service.revoke_deletion("user-1", now)
+
+    assert expired.value.code == "DELETION_REVOCATION_EXPIRED"
+    assert expired.value.status_code == 409
+    assert repository.deletions[request.id] == before
+    assert repository.user_status["user-1"] == "DELETION_PENDING"
+    assert repository.learning_rows == {"user-1"}
+    assert repository.entitlements == {"user-1"}
+    assert not repository.outbox
+
+
+@pytest.mark.asyncio
+async def test_revoke_uses_stored_effective_at_instead_of_recomputing_seven_days() -> None:
+    # 功能:验证截止守卫比较申请实际保存的生效时间
+    # 参数:无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
+    repository = InMemoryAccountRepository()
+    repository.seed_user("user-1")
+    request = await repository.request_deletion("user-1", NOW, NOW + timedelta(days=1))
+
+    with pytest.raises(AppError) as expired:
+        await repository.revoke_deletion("user-1", NOW + timedelta(days=1))
+
+    assert expired.value.code == "DELETION_REVOCATION_EXPIRED"
+    assert request.status == "PENDING"
+    assert request.revoked_at is None
+
+
+@pytest.mark.asyncio
+async def test_processing_deletion_keeps_existing_revoke_error() -> None:
+    # 功能:验证worker已启动时仍返回既有处理中错误
+    # 参数:无形参。
+    # 返回:无返回值;断言失败时由pytest报告测试失败
+    repository = InMemoryAccountRepository()
+    repository.seed_user("user-1")
+    service = AccountLifecycleService(repository, RevocationRecorder())
+    request = await service.request_deletion("user-1", NOW - timedelta(days=7))
+    await service.execute_due_deletions(NOW)
+    before = replace(request)
+
+    with pytest.raises(AppError) as processing:
+        await service.revoke_deletion("user-1", NOW)
+
+    assert processing.value.code == "DELETION_ALREADY_PROCESSING"
+    assert request == before
+
+
+@pytest.mark.asyncio
 async def test_revoke_and_due_execution_have_one_final_state() -> None:
     # 功能:验证注销撤回与到期执行竞争只保留一个最终状态
     # 参数:
@@ -98,15 +197,14 @@ async def test_revoke_and_due_execution_have_one_final_state() -> None:
     )
 
     current = repository.deletions[request.id]
-    assert current.status in {"REVOKED", "DELETING"}
-    if current.status == "REVOKED":
-        assert repository.user_status["user-1"] == "ACTIVE"
-        assert not repository.outbox
-    else:
-        assert repository.user_status["user-1"] == "DELETING"
-        assert len(repository.outbox) == 1
-        assert revocations.users == ["user-1"]
-    assert sum(not isinstance(item, Exception) for item in results) >= 1
+    assert current.status == "DELETING"
+    assert current.revoked_at is None
+    assert repository.user_status["user-1"] == "DELETING"
+    assert len(repository.outbox) == 1
+    assert revocations.users == ["user-1"]
+    assert isinstance(results[0], AppError)
+    assert results[0].code in {"DELETION_REVOCATION_EXPIRED", "DELETION_ALREADY_PROCESSING"}
+    assert results[1] == [current]
 
 
 @pytest.mark.asyncio
