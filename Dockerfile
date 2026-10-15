@@ -21,11 +21,16 @@ RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv pip install --python /app/.venv/bin/python --no-deps \
         --index-url https://mirrors.aliyun.com/pypi/simple/ . \
     && uv pip check --python /app/.venv/bin/python
+COPY deploy/prune-runtime.py /tmp/prune-runtime.py
+RUN python /tmp/prune-runtime.py / dependencies
 
 # 同一固定基础镜像的运行文件系统,保留 Python/系统库,去掉构建工具。
 FROM python-base AS runtime-filesystem
 
+COPY deploy/prune-runtime.py /tmp/prune-runtime.py
 RUN rm /usr/local/bin/uv /usr/local/bin/uvx \
+    && python /tmp/prune-runtime.py / base \
+    && rm /tmp/prune-runtime.py \
     && groupadd --system juya \
     && useradd --system --gid juya --home-dir /app juya
 
